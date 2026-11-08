@@ -8,7 +8,7 @@
   const TH = 32; // tile height px; one z unit is TH px too
   const WALL_H = 2.4;
   const WORKING = new Set(['thinking', 'tool', 'typing', 'waiting', 'error']);
-  const MAX_WANDERERS = 7;
+  const MAX_WANDERERS = 3; // idle or finished agents left in view; the rest are counted, not drawn
   const SPEED = 2.1; // tiles / second
 
   const SKIN = ['#f3cfb0', '#e5b38f', '#c98d66', '#9a6646', '#6e4630', '#f7dcc7'];
@@ -560,7 +560,15 @@
       const off = sessions
         .filter((s) => !isWorking(s))
         .sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
-      const wanderers = off.slice(0, MAX_WANDERERS);
+      // A few off-duty agents stay in view, picked at random and kept until they go back
+      // to work, so the pick doesn't reshuffle on every update.
+      const kept = this.keptOff || (this.keptOff = new Set());
+      for (const k of [...kept]) if (!off.some((s) => s.key === k)) kept.delete(k);
+      const pool = off.filter((s) => !kept.has(s.key));
+      while (kept.size < MAX_WANDERERS && pool.length) {
+        kept.add(pool.splice(Math.floor(Math.random() * pool.length), 1)[0].key);
+      }
+      const wanderers = off.filter((s) => kept.has(s.key));
       this.offDuty = off.length - wanderers.length;
 
       const cap = this.plan.desks.filter((d) => !d.spot).length;

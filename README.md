@@ -246,8 +246,8 @@ In rooms that have zones, what an agent is doing decides where it works:
 |---|---|---|
 | Running commands, tests, builds | the pod by the server rack | the 토벌 field, facing a monster |
 | Editing files | left desks of the other pods | the laptop table |
-| Reading, searching, the web, the browser | the lounge bookshelf | the 노동 게시판 |
-| Sub-agents | ends of the meeting table | the weeding field |
+| Reading, searching, the web, the browser | the lounge bookshelf | the 노동 창구, where the labour armour hands out jobs |
+| Sub-agents | ends of the meeting table | the weeding field, by the grass armour's scale |
 | Thinking or writing its reply | right desks, the whiteboard | the pond bank |
 | Waiting on you, or the request failed | out front, facing you | by the 토벌 warning sign |
 | Done | wanders (pantry, lounge…) | campfire, ramen stall, picnic, bench… |

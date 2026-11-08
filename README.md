@@ -84,6 +84,7 @@ store and isn't supported yet; its `agy` CLI is.)
 --omp-dir <path>  OMP sessions root, or a directory passed to omp --session-dir
 --no-open         Don't open the browser
 --private         Hide prompts, replies and titles — status only (screen-share safe)
+--account <name>  Only Claude sessions of one account (label, id prefix or "none"); see Claude accounts
 --json            Print one snapshot as JSON and exit
 --demo            Show a made-up team instead of your sessions (screenshots, trying it out)
 --stop            Stop a running dashboard (or say /myoffice stop)
@@ -154,6 +155,31 @@ whole, at most every 5 seconds, bounded to 32 MB of decoded data. Kimi Code and 
 logs up to 32 MB are replayed whole on discovery; larger ones are read head + tail. An incomplete compressed write
 preserves the last readable snapshot and is retried. Large unsupported logs
 are reported rather than truncated into a misleading status.
+
+### Claude accounts
+
+Claude Code transcripts don't record which Claude account ran them, and the
+Claude desktop app writes every signed-in account's Code sessions into the same
+`~/.claude/projects`. The app also keeps one metadata file per session in
+`~/Library/Application Support/Claude/claude-code-sessions/<account>/<org>/local_*.json`
+(`%APPDATA%\Claude\…` on Windows, `~/.config/Claude/…` on Linux; override with
+`WMAD_DESKTOP_SESSIONS_DIR`), whose `cliSessionId` names the transcript. The
+dashboard reads those files to tag each Claude session — subagents inherit their
+parent's — with its account. Sessions started from a terminal have no such file
+and stay untagged. This layout is the desktop app's own and may change.
+
+Name the accounts with `WMAD_ACCOUNT_LABELS`, inline JSON or a path to a JSON
+file, mapping an account id (or a prefix of at least 4 characters) to a label.
+Keep it out of the repository:
+
+```bash
+WMAD_ACCOUNT_LABELS='{"aaaa1111":"Max","bbbb2222":"Personal"}' node bin/cli.js
+```
+
+Cards, the side panel, the detail panel and the office name tags then show the
+label. Open `http://localhost:4545/?account=Personal` (a label, an id prefix, or
+`none`) for one account's office; pop-outs keep the filter and the window title
+starts with it. `--account <name>` makes a filter the server's default.
 
 ### Magpie (optional)
 

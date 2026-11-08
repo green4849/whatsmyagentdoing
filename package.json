@@ -49,6 +49,7 @@
     "test:external": "node --test tests/external.cjs",
     "test:hook": "node --test tests/hook.cjs tests/usage.cjs",
     "test:transcript": "node --test tests/transcript.cjs",
+    "test:accounts": "node --test tests/accounts.cjs",
     "test:server": "node --test tests/server.cjs",
     "test:clients": "node --test tests/clients.cjs",
     "test:ui:clients": "node tests/ui-clients.cjs"

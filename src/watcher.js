@@ -17,6 +17,7 @@ const external = require('./external');
 const { ompDirs, piDirs } = require('./omp');
 const hook = require('./hook');
 const { transcript } = require('./transcript');
+const { AccountIndex, desktopSessionsDir } = require('./accounts');
 
 const HEAD_BYTES = 128 * 1024;
 const TAIL_BYTES = 768 * 1024;
@@ -264,6 +265,8 @@ class Watcher extends EventEmitter {
     // opencode and hermes sessions, refreshed from their databases on each scan.
     this.external = [];
     this.externalKey = '';
+    // Claude account per session, from the desktop app's session metadata.
+    this.accounts = new AccountIndex({ dir: desktopSessionsDir(process.env, home, process.platform), labels: process.env.WMAD_ACCOUNT_LABELS });
   }
 
   start() {
@@ -370,6 +373,7 @@ class Watcher extends EventEmitter {
         ...antigravityFiles(since)];
       // These have no file to tail, so they refresh with the walk.
       if (this.loadExternal(since)) changed = true;
+      if (this.accounts.refresh()) changed = true;
     }
 
     for (const c of this.candidates) {
@@ -638,6 +642,8 @@ class Watcher extends EventEmitter {
         const t = this.antigravityTitle(s.id);
         if (t) s.title = t;
       }
+      // Subagent logs are named after themselves; their account is the parent's.
+      if (s.agent === 'claude') s.account = this.accounts.lookup(s.subagent ? s.parentId : s.id);
       // A permission prompt from the optional Claude Code hook, until the log moves on.
       const wait = s.agent === 'claude' && !s.subagent && this.waiting.get(s.id);
       if (wait && wait.at > (s.lastEventAt || 0)) {

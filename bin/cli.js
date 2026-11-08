@@ -24,6 +24,8 @@ Options:
   --omp-dir <path>  OMP sessions root (or a direct --session-dir directory)
   --no-open         Don't open the browser
   --private         Hide prompts, replies and titles; show status only
+  --account <name>  Only Claude sessions of one account (a WMAD_ACCOUNT_LABELS label,
+                    an account id prefix, or "none"); pages can use ?account= instead
   --json            Print one snapshot as JSON and exit
   --demo            Show a made-up team instead of your sessions
   --stop            Stop a running dashboard
@@ -51,6 +53,9 @@ Override with CLAUDE_CONFIG_DIR / CODEX_HOME / GEMINI_CLI_HOME / ANTIGRAVITY_HOM
 OMP profiles under ~/.omp/profiles are discovered automatically.
 Other clients: KIMI_CODE_HOME / DSH_HOME / GROK_HOME.
 OpenCode and Hermes need Node.js 22.13+ for its built-in node:sqlite.
+Claude accounts: the desktop app's session list tells which account ran each
+Claude Code session. Name them with WMAD_ACCOUNT_LABELS (JSON or a JSON file path),
+e.g. {"aaaa1111":"Max","bbbb2222":"Personal"}; WMAD_DESKTOP_SESSIONS_DIR overrides the folder.
 Optional Magpie: WMAD_MAGPIE_URL=http://127.0.0.1:3430
 and WMAD_MAGPIE_KEY (web sign-in key, server-side only).
 For multiple local instances, WMAD_MAGPIE_SOURCES is a JSON array
@@ -73,6 +78,11 @@ function parseArgs(argv) {
     else if (a.startsWith('--omp-dir=')) o.ompDir = a.slice(10);
     else if (a === '--no-open') o.open = false;
     else if (a === '--private') o.privacy = true;
+    else if (a === '--account') {
+      if (!argv[i + 1] || argv[i + 1].startsWith('--')) { console.error('--account requires a label or account id'); process.exit(1); }
+      o.account = argv[++i];
+    }
+    else if (a.startsWith('--account=')) o.account = a.slice(10);
     else if (a === '--json') o.json = true;
     else if (a === '--demo') o.demo = true;
     else if (a === '--stop') o.stop = true;

@@ -121,6 +121,7 @@
   @media (prefers-color-scheme: dark) {
     .agent-logo.mono { filter: invert(1); }
   }
+  .acct { flex: none; padding: 1px 6px; margin-left: 4px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
   .project { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .time { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
   .title { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -535,6 +536,8 @@ function readPreferences() {
   }));
 }
 const PIP = new URLSearchParams(location.search).get('pip') === '1';
+// ?account=<label|id|none> shows one Claude account's sessions; kept in the URL so reloads and pop-outs keep it.
+const ACCOUNT = (new URLSearchParams(location.search).get('account') || '').slice(0, 100);
 if (PIP) document.body.classList.add('pip');
 
 // ?view=office&quality=high&scene=pirate (what `--scene` opens) sets the prefs.
@@ -546,7 +549,12 @@ if (PIP) document.body.classList.add('pip');
     } catch { /* malformed preferences use the saved defaults */ }
   }
   for (const k of ['view', 'quality', 'scene', 'lang']) if (validPreference(k, q.get(k))) store.set(k, q.get(k));
-  if (location.search) history.replaceState(null, '', location.pathname + (PIP ? '?pip=1' : ''));
+  if (location.search) {
+    const keep = new URLSearchParams();
+    if (PIP) keep.set('pip', '1');
+    if (ACCOUNT) keep.set('account', ACCOUNT);
+    history.replaceState(null, '', location.pathname + (keep.size ? `?${keep}` : ''));
+  }
 }
 
 const state = {
@@ -658,6 +666,9 @@ function renderToday() {
     <div class="today-note">${esc(L.summaryNote)}</div>`;
 }
 
+// The Claude account a session ran under; hidden when the page already shows only one account.
+const accountName = (s) => (!ACCOUNT && s.account ? s.account.label : '');
+const accountChip = (s) => (accountName(s) ? `<span class="acct" title="${esc(s.account.id)}">${esc(accountName(s))}</span>` : '');
 function card(s, now) {
   const project = s.project || (s.cwd ? s.cwd : '—');
   const title = s.title && s.title !== project ? `<div class="title" title="${esc(s.title)}">${esc(s.title)}</div>` : '';
@@ -672,7 +683,7 @@ function card(s, now) {
   return `
   <div class="card${s.subagent ? ' sub' : ''}${s.stuck ? ' is-stuck' : ''}${state.flash.has(s.key) ? ' flash' : ''}" data-s="${s.status}" data-key="${esc(s.key)}">
     <div class="top">
-      <span class="agent ${esc(s.agent)}">${agentLogo(s.agent)}${esc(s.agentName || AGENT_NAME[s.agent] || s.agent)}</span>
+      <span class="agent ${esc(s.agent)}">${agentLogo(s.agent)}${esc(s.agentName || AGENT_NAME[s.agent] || s.agent)}</span>${accountChip(s)}
       <span class="project" title="${esc(s.cwd)}">${esc(project)}</span>
       <span class="time" data-time="${esc(s.key)}">${esc(timeLabel(s, now))}</span>
     </div>
@@ -707,7 +718,7 @@ function render() {
   renderSide();
   const working = count((s) => ACTIVE.has(s));
   const needs = count(GROUPS[0].match);
-  document.title = (needs ? `(${needs}!) ` : working ? `(${working}) ` : '') + L.title;
+  document.title = (needs ? `(${needs}!) ` : working ? `(${working}) ` : '') + (ACCOUNT ? `${ACCOUNT} · ` : '') + L.title;
 
   const main = document.getElementById('main');
   const officeMode = state.view === 'office' || state.full;
@@ -821,7 +832,7 @@ function chime(kind) {
 }
 
 function connect() {
-  const es = new EventSource('/events');
+  const es = new EventSource(ACCOUNT ? `/events?account=${encodeURIComponent(ACCOUNT)}` : '/events');
   const conn = document.getElementById('conn');
   es.onmessage = (e) => { conn.classList.remove('on'); onData(JSON.parse(e.data)); };
   es.onerror = () => conn.classList.add('on');
@@ -923,7 +934,10 @@ function hideTip() { tipKey = null; tipPinned = false; tip.style.display = 'none
 const officeOpts = {
   compact: PIP,
   onFrame: (renderer) => popout?.drawPreview(renderer),
-  label: (s) => (s.agent === 'omp' && s.subagent && s.title) || s.project || AGENT_NAME[s.agent] || s.agent,
+  label: (s) => {
+    const name = (s.agent === 'omp' && s.subagent && s.title) || s.project || AGENT_NAME[s.agent] || s.agent;
+    return accountName(s) ? `${name} · ${accountName(s)}` : name;
+  },
   onHover(s, at, click) {
     // In full screen a click opens the agent in the side panel instead of pinning a card.
     if (click && state.full && s) { hideTip(); openDetail(s.key); return; }
@@ -1217,7 +1231,7 @@ function renderSide() {
     return `<div class="side-group">${esc(L[g.key])} · ${items.length}</div>` + items.map((s, i) => {
       const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || s.title || '';
       return `<button class="srow${s.subagent ? ' sub' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i + (g.key === 'working' ? 3 : g.key === 'finished' ? 8 : 0), 14)}">
-        ${agentLogo(s.agent) || '<span></span>'}<span class="nm">${esc(s.project || AGENT_NAME[s.agent] || s.agent)}</span>
+        ${agentLogo(s.agent) || '<span></span>'}<span class="nm">${esc(s.project || AGENT_NAME[s.agent] || s.agent)}${accountChip(s)}</span>
         <span class="tm" data-time="${esc(s.key)}"></span>
         <span class="st"><i></i><b>${esc(L[s.status] || s.status)}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
     }).join('');
@@ -1277,6 +1291,7 @@ function renderDetail(scrollDown) {
     <div class="dstatus" style="--s:${statusColor(s.status)}"><i></i><b>${esc(L[s.status] || s.status)}</b>${s.activity ? `<span class="act">${esc(s.activity)}</span>` : ''}${s.stuck ? `<span class="stuck">${esc(L.stuck(s.stuck))}</span>` : ''}</div>
     <dl class="dmeta">
       <dt>${esc(L.modelL)}</dt><dd>${esc(s.model || '—')}${s.subagent ? ` · ${esc(L.sub)}` : ''}</dd>
+      ${s.account ? `<dt>${esc(L.accountL || 'Account')}</dt><dd title="${esc(s.account.id)}">${esc(s.account.label)}</dd>` : ''}
       <dt>${esc(L.folderL)}</dt><dd class="mono" title="${esc(s.cwd || '')}">${esc(s.cwd || '—')}</dd>
       <dt>${esc(L.today)}</dt><dd>${s.today ? `${s.today.turns} ${esc(L.turnsL)} · ${fmtTokens(s.today.tokens)} ${esc(L.tokensL)}` : '—'}</dd>
       <dt></dt><dd data-time="${esc(s.key)}"></dd>

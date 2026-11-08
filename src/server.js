@@ -20,6 +20,7 @@ const scenes = require('./scenes');
 const updater = require('./update');
 const { ompResumeCommand } = require('./omp');
 const { dayKey } = require('./parsers');
+const { matchAccount } = require('./accounts');
 
 function serveFile(res, root, rel) {
   const file = path.normalize(path.join(root, rel));
@@ -61,6 +62,7 @@ function view(s, now, { privacy }) {
     project: s.cwd ? `${s.agent === 'copilot' ? 'workspace-' : ''}${path.basename(s.cwd)}` : null,
     title: s.title,
     model: s.model,
+    account: s.account || null,
     status,
     stuck,
     context: s.context ? { used: s.context, window: s.contextWindow || null } : null,
@@ -112,31 +114,43 @@ function summary(sessions, now) {
   return out;
 }
 
-function snapshot(watcher, opts) {
+// account: show only sessions of one Claude account (see accounts.js); defaults to --account.
+function snapshot(watcher, opts, account = opts.account) {
   const now = Date.now();
   const raw = watcher.sessions();
-  const sessions = raw.map((s) => view(s, now, opts));
+  const sessions = raw.map((s) => view(s, now, opts)).filter((s) => matchAccount(account, s.account));
   sessions.sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
-  return { now, lang: opts.demo ? null : promptLanguage(raw), sessions, summary: summary(sessions, now) };
+  return { now, lang: opts.demo ? null : promptLanguage(raw), account: account || null, sessions, summary: summary(sessions, now) };
+}
+
+// ?account= on the page or API overrides --account; an empty value shows everyone.
+function accountParam(url, opts) {
+  const q = url.searchParams.get('account');
+  return (q === null ? opts.account : q.slice(0, 100)) || '';
 }
 
 function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
-  const clients = new Set();
-  let last = '';
+  const clients = new Map(); // response -> account filter
+  const last = new Map();    // account filter -> last body signature
 
   const push = (force) => {
-    let body;
-    try { body = JSON.stringify(snapshot(watcher, opts)); } catch (e) { console.error('snapshot failed:', e.message); return; }
-    // Compare without the timestamp so idle ticks don't spam clients.
-    const sig = body.replace(/^\{"now":\d+,/, '{');
-    if (!force && sig === last) return;
-    last = sig;
-    for (const res of clients) res.write(`data: ${body}\n\n`);
+    // One snapshot per distinct filter, so many windows on one account cost one.
+    const bodies = new Map();
+    for (const account of new Set(clients.values())) {
+      let body;
+      try { body = JSON.stringify(snapshot(watcher, opts, account)); } catch (e) { console.error('snapshot failed:', e.message); return; }
+      // Compare without the timestamp so idle ticks don't spam clients.
+      const sig = body.replace(/^\{"now":\d+,/, '{');
+      if (!force && sig === last.get(account)) continue;
+      last.set(account, sig);
+      bodies.set(account, body);
+    }
+    for (const [res, account] of clients) if (bodies.has(account)) res.write(`data: ${bodies.get(account)}\n\n`);
   };
   watcher.on('change', () => push(false));
   // Status can flip with no new log lines (see view()), so re-check on a clock.
   setInterval(() => push(false), 5000).unref();
-  setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 20000).unref();
+  setInterval(() => { for (const res of clients.keys()) res.write(': ping\n\n'); }, 20000).unref();
 
   const server = http.createServer((req, res) => {
     // Refuse anything not addressed to loopback (blocks DNS-rebinding pages
@@ -191,7 +205,7 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
       res.end(JSON.stringify(messages ? { messages } : { messages: [], private: !!opts.privacy }));
     } else if (url.pathname === '/api/sessions') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(snapshot(watcher, opts)));
+      res.end(JSON.stringify(snapshot(watcher, opts, accountParam(url, opts))));
     } else if (url.pathname === '/api/shutdown' && req.method === 'POST') {
       // Only our CLI sends this header; a web page can't add a custom header
       // to a cross-site request without a CORS preflight, which we never allow.
@@ -201,7 +215,7 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
       }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
-      for (const c of clients) c.end();
+      for (const c of clients.keys()) c.end();
       setTimeout(onShutdown, 50);
     } else if (url.pathname === '/api/version') {
       updater.checkLatest().finally(() => {
@@ -215,7 +229,7 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
         (version) => {
           res.writeHead(200, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ ok: true, version }));
-          for (const c of clients) c.end();
+          for (const c of clients.keys()) c.end();
           if (onRestart) setTimeout(onRestart, 100);
         },
         (e) => { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: false, error: String(e.message || e) })); },
@@ -229,8 +243,9 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
         'cache-control': 'no-store',
         connection: 'keep-alive',
       });
-      res.write(`data: ${JSON.stringify(snapshot(watcher, opts))}\n\n`);
-      clients.add(res);
+      const account = accountParam(url, opts);
+      res.write(`data: ${JSON.stringify(snapshot(watcher, opts, account))}\n\n`);
+      clients.set(res, account);
       req.on('close', () => clients.delete(res));
     } else {
       res.writeHead(404).end();

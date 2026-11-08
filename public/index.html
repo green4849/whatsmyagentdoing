@@ -734,8 +734,11 @@ function saveFolders() {
 const folderKey = (s) => s.cwd || `${s.agent}:`;
 // The folder's own name unless you renamed it.
 const projectName = (s) => folders.names[folderKey(s)] || s.project || AGENT_NAME[s.agent] || s.agent;
-// Name-tag colour: the folder's, else the account's (WMAD_ACCOUNT_LABELS), else the default.
-const tagColor = (s) => folders.colors[folderKey(s)] || (s.account && HEX.test(s.account.color || '') ? s.account.color : null);
+// Name-tag colour: the folder's, else the custom character's (characters.json "colors"),
+// else the account's (WMAD_ACCOUNT_LABELS), else the default.
+const tagColor = (s) => folders.colors[folderKey(s)]
+  || (s.character && HEX.test(s.character.color || '') ? s.character.color : null)
+  || (s.account && HEX.test(s.account.color || '') ? s.account.color : null);
 // A session's own name inside its folder: its title (/rename or the desktop app's), else agent and start time.
 // A session's own name: yours, else its title (/rename or the desktop app's), else agent and start time.
 const customName = (s) => folders.sessions[s.key] || '';

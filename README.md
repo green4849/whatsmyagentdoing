@@ -275,9 +275,14 @@ and say who wears which in `~/.whatsmyagentdoing/characters.json`:
 {
   "folders":  { "~/Documents/work": "mascot.glb" },
   "accounts": { "118d2a10": { "model": "cat.glb", "turn": 180, "height": 1.1 } },
-  "sessions": { "3f2a9c": "mascot.glb" }
+  "sessions": { "3f2a9c": "mascot.glb" },
+  "colors":   { "mascot.glb": "#f6b8c8", "cat.glb": "#f7d94c" }
 }
 ```
+
+`colors` gives each model its own name-tag colour (`#rrggbb`), whoever wears
+it. A folder colour you picked in the page still wins; without one, the tag
+keeps the account colour.
 
 A folder covers its subfolders (the deepest match wins); accounts and
 sessions match by id prefix; session beats folder beats account. `turn`

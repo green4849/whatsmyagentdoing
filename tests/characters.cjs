@@ -37,6 +37,17 @@ test('session beats folder beats account, and the deepest folder wins', () => {
   assert.equal(chars.resolve({ id: 'x', cwd: '/w/deep' }).turn, 180);
 });
 
+test('a model can carry its own name-tag colour', () => {
+  const { chars } = setup({
+    folders: { '/w': 'blob.glb', '/c': 'cat.glb', '/m': 'me.glb' },
+    colors: { 'blob.glb': '#F6B8C8', 'cat.glb': 'pink', 'me.glb': '#fff', '../x.glb': '#000000' },
+  });
+  chars.refresh();
+  assert.equal(chars.resolve({ cwd: '/w' }).color, '#f6b8c8', 'valid #rrggbb, lower-cased');
+  assert.equal('color' in chars.resolve({ cwd: '/c' }), false, 'named colours are ignored');
+  assert.equal('color' in chars.resolve({ cwd: '/m' }), false, 'short hex is ignored');
+});
+
 test('bad names, missing files and bad values are ignored', () => {
   const { chars } = setup({
     folders: { '/a': '../secret.json', '/b': 'missing.glb', '/c': { model: 'blob.glb', height: 50, turn: 'x' }, '/d': '.hidden.glb' },

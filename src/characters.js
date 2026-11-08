@@ -13,6 +13,8 @@
 // folder wins); accounts and sessions match by id prefix. Session beats
 // folder beats account. "turn" rotates a model that faces the wrong way
 // (degrees), "height" scales it against the stock characters (1 = same).
+// An optional top-level "colors" gives each model its name-tag colour, whoever
+// wears it: { "colors": { "mascot.glb": "#f6b8c8" } }.
 // Both files are re-read when they change; the server only ever serves plain
 // .glb file names from the models folder.
 
@@ -21,6 +23,7 @@ const os = require('os');
 const path = require('path');
 
 const MODEL_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]*\.glb$/;
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 function baseDir(env = process.env) {
   return env.WMAD_CHARACTERS_DIR || path.join(os.homedir(), '.whatsmyagentdoing');
@@ -50,6 +53,7 @@ class Characters {
     this.file = path.join(dir, 'characters.json');
     this.stamp = null;
     this.rules = { folders: [], accounts: [], sessions: [] };
+    this.colors = new Map(); // model file name -> #rrggbb name-tag colour
     this.versions = new Map(); // model file name -> mtime, or null when missing
     this.warned = new Set();
   }
@@ -70,6 +74,10 @@ class Characters {
         accounts: entries(obj.accounts, (k) => k.trim().toLowerCase()),
         sessions: entries(obj.sessions, (k) => k.trim().toLowerCase()),
       };
+      const colors = obj.colors && typeof obj.colors === 'object' && !Array.isArray(obj.colors) ? obj.colors : {};
+      this.colors = new Map(Object.entries(colors)
+        .filter(([k, v]) => MODEL_NAME.test(k) && typeof v === 'string' && HEX_COLOR.test(v))
+        .map(([k, v]) => [k, v.toLowerCase()]));
     }
     this.versions.clear();
     for (const list of Object.values(this.rules)) {
@@ -90,7 +98,7 @@ class Characters {
     console.warn(msg);
   }
 
-  // { url, turn?, height? } for a session view, or null for the stock characters.
+  // { url, turn?, height?, color? } for a session view, or null for the stock characters.
   resolve(s) {
     const id = String(s.id || '').toLowerCase();
     const cwd = s.cwd ? normPath(s.cwd) : '';
@@ -102,7 +110,8 @@ class Characters {
     const { model, ...rest } = hit[1];
     const v = this.versions.get(model);
     if (v == null) return null;
-    return { url: `/characters/${encodeURIComponent(model)}?v=${v}`, ...rest };
+    const color = this.colors.get(model);
+    return { url: `/characters/${encodeURIComponent(model)}?v=${v}`, ...rest, ...(color ? { color } : {}) };
   }
 
   // Absolute path of a model the page asked for, or null.

@@ -40,7 +40,7 @@ function scenePlan(def) {
   for (const [x, y, w, d] of def.solid || []) grid.block(x, y, w, d, 0.1);
   const rad = (deg) => (deg == null ? null : (deg * Math.PI) / 180);
   const desks = def.stations.map((st) => ({
-    x: st.x, y: st.y, side: 'n', pose: st.pose || 'stand', yaw: rad(st.yaw), anim: st.anim, seat: { x: st.x, y: st.y },
+    x: st.x, y: st.y, side: 'n', pose: st.pose || 'stand', yaw: rad(st.yaw), anim: st.anim, seat: { x: st.x, y: st.y }, zone: st.zone,
   }));
   const pois = def.pois.map((q) => ({
     ...q, yaw: rad(q.yaw), face: 'front', sit: q.sit ? (typeof q.sit === 'number' ? q.sit : 0.3) : 0, taken: null,
@@ -51,12 +51,29 @@ function scenePlan(def) {
   };
 }
 
+// ?hour=18 previews a time of day instead of the clock.
+const FORCED_HOUR = (() => {
+  try {
+    const v = new URLSearchParams(location.search).get('hour');
+    return v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) % 24 : null;
+  } catch { return null; }
+})();
+
 function skyNow() {
-  const h = new Date().getHours() + new Date().getMinutes() / 60;
-  if (h >= 7 && h < 17) return { sky: 0xa9d4f2, sun: 1.7, amb: 1.15, night: false };
-  if (h >= 5 && h < 7) return { sky: 0xf3c9a8, sun: 1.1, amb: 0.8, night: false };
-  if (h >= 17 && h < 19) return { sky: 0xf0a679, sun: 1.0, amb: 0.75, night: false };
-  return { sky: 0x1d2747, sun: 0.9, amb: 1.05, night: true };
+  const h = FORCED_HOUR ?? new Date().getHours() + new Date().getMinutes() / 60;
+  if (h >= 7 && h < 17) return { sky: 0xa9d4f2, sun: 1.7, amb: 1.15, night: false, phase: 'day' };
+  if (h >= 5 && h < 7) return { sky: 0xf3c9a8, sun: 1.1, amb: 0.8, night: false, phase: 'dawn' };
+  if (h >= 17 && h < 19) return { sky: 0xf0a679, sun: 1.0, amb: 0.75, night: false, phase: 'dusk' };
+  return { sky: 0x1d2747, sun: 0.9, amb: 1.05, night: true, phase: 'night' };
+}
+
+// A scene colour as it looks at this time of day: as set by day, tinted
+// towards the sky at dawn and dusk, the night colour at night.
+const _tint = new THREE.Color();
+function tinted(base, sky, night, k = 0.7) {
+  if (sky.night) return _tint.set(night);
+  _tint.set(base);
+  return sky.phase === 'day' ? _tint : _tint.lerp(new THREE.Color(sky.sky), k);
 }
 
 // The scene pack for the instance being constructed. The base constructor
@@ -301,7 +318,7 @@ export class Office3D extends window.Office {
     this.room.add(sign);
 
     // desks
-    for (const dk of plan.desks) this.buildDesk(dk);
+    for (const dk of plan.desks) if (!dk.spot) this.buildDesk(dk);
 
     for (const p of plan.props) this.buildProp(p);
     this.fitCamera3D(true);
@@ -562,6 +579,7 @@ export class Office3D extends window.Office {
     this.flames = [];
     this.pendants = [];
     this.pulsers = [];
+    this.nightLights = [];
     this.windowMat = null;
     this.clearMat = null;
     this.stars = null;
@@ -615,6 +633,7 @@ export class Office3D extends window.Office {
       const l = new THREE.PointLight(p.color || '#ffffff', p.intensity ?? 1, p.range || 6);
       l.position.set(p.x, p.z || 2.3, p.y);
       this.room.add(l);
+      if (p.night) this.nightLights.push({ light: l, base: p.intensity ?? 1 });
       return;
     }
     if (p.special === 'planet') return this.buildPlanet(p);
@@ -624,6 +643,7 @@ export class Office3D extends window.Office {
         mat: new THREE.MeshStandardMaterial({ color: p.color || '#5ad1ff', emissive: p.color || '#5ad1ff', emissiveIntensity: p.intensity ?? 1.2 }), shadow: false,
       });
       if (p.pulse) (this.pulsers = this.pulsers || []).push({ m, base: p.intensity ?? 1.2, ph: p.x + p.y });
+      if (p.night) this.nightLights.push({ mat: m.material, base: p.intensity ?? 1.2 });
       return m;
     }
     if (p.special === 'wall') return this.buildWall(p);
@@ -926,13 +946,19 @@ export class Office3D extends window.Office {
       f.inner.scale.set(1, 1.6 - k * 0.6, 1);
       f.light.intensity = (sky.night ? 3 : 1.2) * k;
     }
-    if (this.scene.background && !def.fixedSky) this.scene.background.set(sky.night ? '#13213f' : (def.background || def.sky || '#9fd3ef'));
+    if (this.scene.background && !def.fixedSky) this.scene.background.copy(tinted(def.background || def.sky || '#9fd3ef', sky, '#13213f'));
     if (this.planet) this.planet.rotation.y = t * 0.03;
     if (this.stars) this.stars.rotation.y = t * 0.004;
     for (const g of this.pulsers || []) g.m.material.emissiveIntensity = g.base * (0.65 + 0.35 * Math.sin(t * 2.2 + g.ph));
-    if (this.windowMat) { this.windowMat.color.set(sky.night ? '#1d2747' : def.sky); this.windowMat.emissive.set(sky.night ? '#1d2747' : def.sky); }
+    if (this.windowMat) { const c = tinted(def.sky || '#a9d4f2', sky, '#1d2747'); this.windowMat.color.copy(c); this.windowMat.emissive.copy(c); }
     for (const l of this.pendants || []) l.intensity = sky.night ? 1.6 : 0.7;
-    if (this.scene.fog) this.scene.fog.color.set(sky.night ? '#1b2a4a' : def.fog[0]);
+    if (this.scene.fog) this.scene.fog.color.copy(tinted(def.fog[0], sky, '#1b2a4a', 0.6));
+    // lamps and glows marked `night` light up from dusk to dawn
+    const lit = sky.night ? 1 : sky.phase === 'day' ? 0 : 0.6;
+    for (const n of this.nightLights || []) {
+      if (n.light) n.light.intensity = n.base * lit;
+      if (n.mat) n.mat.emissiveIntensity = n.base * (0.15 + 0.85 * lit);
+    }
   }
 
   // ------------------------------------------------------------ camera
@@ -1277,6 +1303,16 @@ export class Office3D extends window.Office {
     const sky = skyNow();
     this.sun.intensity = sky.sun;
     this.hemi.intensity = sky.amb;
+    // warm light at dawn and dusk, cool light at night (the ground hides most of the sky)
+    this.sun.color.set(0xfff1dc);
+    this.hemi.color.set(0xfff8ee);
+    if (sky.phase === 'dawn' || sky.phase === 'dusk') {
+      this.sun.color.lerp(new THREE.Color(sky.sky), 0.6);
+      this.hemi.color.lerp(new THREE.Color(sky.sky), 0.45);
+    } else if (sky.night) {
+      this.sun.color.lerp(new THREE.Color(0x8fa6e0), 0.6);
+      this.hemi.color.lerp(new THREE.Color(0x7d8fd0), 0.5);
+    }
     if (this.windowMat) {
       this.windowMat.color.setHex(sky.sky);
       this.windowMat.emissive.setHex(sky.sky);

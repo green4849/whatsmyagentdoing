@@ -274,6 +274,12 @@
         const fps = this.fpsCap(t);
         if (fps && t - (this.drawnAt || 0) < 1000 / fps - 2) return;
         this.drawnAt = t;
+        // Zoned rooms re-check activities once a second, so an agent that
+        // keeps doing one thing moves even when no new log line arrives.
+        if (this.zoned && this.lastSessions && t - (this.zoneTick || 0) > 1000) {
+          this.zoneTick = t;
+          this.update(this.lastSessions);
+        }
         this.frame(t);
       };
       this.raf = requestAnimationFrame(loop);
@@ -347,8 +353,11 @@
         const panel = PANEL[p % PANEL.length];
         for (let k = 0; k < 2; k++) {
           const x = px + k * 1.5;
-          desks.push({ x, y: py, side: 'n', seat: { x: x + 0.7, y: py - 0.45 } });
-          desks.push({ x, y: py + 0.92, side: 's', seat: { x: x + 0.7, y: py + 0.92 + 1.25 } });
+          // Activity zones (zones.js): the pod by the server rack runs commands,
+          // the others write on the left pair and think on the right pair.
+          const zone = p === 1 ? 'run' : k === 0 ? 'write' : 'think';
+          desks.push({ x, y: py, side: 'n', seat: { x: x + 0.7, y: py - 0.45 }, zone });
+          desks.push({ x, y: py + 0.92, side: 's', seat: { x: x + 0.7, y: py + 0.92 + 1.25 }, zone });
           solid(x, py, 1.4, 0.8, 0.08);
           solid(x, py + 0.92, 1.4, 0.8, 0.08);
         }
@@ -509,6 +518,15 @@
         { y: 2.2, color: '#c96442', text: 'SHIP IT' },
         { y: 4.6, color: '#10a37f', text: 'TESTS ✓' },
       ];
+      // Standing spots for the other activity zones (no desk drawn: `spot`).
+      const spot = (x, y, side, zone) => desks.push({ x: x - 0.7, y, side, pose: 'stand', spot: true, zone, seat: { x, y } });
+      spot(mtx - 0.45, mty + 0.7, 'n', 'delegate');           // ends of the meeting table
+      spot(mtx + 3.45, mty + 0.7, 'n', 'delegate');
+      spot(mx + 3.0, 0.65, 's', 'think');                      // at the whiteboard
+      spot(mx + 4.2, 0.65, 's', 'think');
+      spot(mx + 4.0, PY + 0.75, 's', 'research');              // at the bookshelf
+      spot(mx + 6.4, PY + 0.75, 's', 'research');
+      for (const ax of [1.0, 1.8, 2.6, 3.4]) spot(OW - ax, OD + 0.45, 'n', 'attention'); // out front, facing you
       return { W, D, OW, OD, MR, PY, RW, grid, items, props, pois, desks, windows, posters, pp, door: { x: 0.4, y: D - 1.2 } };
     }
 
@@ -531,14 +549,19 @@
     // ------------------------------------------------------------ sessions → people
 
     update(sessions) {
-      const working = sessions.filter((s) => WORKING.has(s.status));
+      this.lastSessions = sessions;
+      const Z = window.OfficeZones;
+      this.zoned = !!(Z && this.plan && this.plan.desks.some((d) => d.zone));
+      // In a zoned room a turn that failed keeps its agent at the attention spot.
+      const isWorking = (s) => WORKING.has(s.status) || (this.zoned && s.status === 'done' && Z.failed(s));
+      const working = sessions.filter(isWorking);
       const off = sessions
-        .filter((s) => !WORKING.has(s.status))
+        .filter((s) => !isWorking(s))
         .sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
       const wanderers = off.slice(0, MAX_WANDERERS);
       this.offDuty = off.length - wanderers.length;
 
-      const cap = this.plan.desks.length;
+      const cap = this.plan.desks.filter((d) => !d.spot).length;
       // Scene packs have a fixed floor plan; the built-in office grows with the team.
       if (!this.plan.fixed && (working.length > cap - 1 || (cap > 8 && working.length < cap * 0.35))) {
         this.plan = this.buildPlan(working.length);
@@ -552,8 +575,33 @@
       // Fill the desks that face us first so more faces and screens show.
       const desks = this.plan.desks;
       const order = desks.map((d, i) => i).sort((a, b) => (desks[a].side === 's') - (desks[b].side === 's') || a - b);
-      for (const s of [...working].sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0))) {
-        if (this.deskOf.has(s.key)) continue;
+      // Zoned rooms: each agent works in the zone for what it is doing (see zones.js).
+      const zones = this.zoneState || (this.zoneState = new Map());
+      for (const k of [...zones.keys()]) if (!workKeys.has(k)) zones.delete(k);
+      const now = Date.now();
+      // Agents that are live go first, so one waiting on you gets the attention spot before an old failed turn.
+      const live = (s) => (WORKING.has(s.status) ? 0 : 1);
+      for (const s of [...working].sort((a, b) => live(a) - live(b) || (a.startedAt || 0) - (b.startedAt || 0))) {
+        const cur = this.deskOf.get(s.key);
+        if (this.zoned) {
+          const st = Z.step(zones.get(s.key), Z.zoneOf(s), now);
+          zones.set(s.key, st);
+          const want = st && st.zone;
+          if (cur != null && desks[cur].zone === want) continue;
+          const i = order.find((n) => !used.has(n) && desks[n].zone === want);
+          if (i != null) {
+            if (cur != null) used.delete(cur);
+            this.deskOf.set(s.key, i);
+            used.add(i);
+            continue;
+          }
+          // A finished turn that failed doesn't hold a work spot elsewhere: it wanders (red ring) instead.
+          if (want === 'attention' && !WORKING.has(s.status)) {
+            if (cur != null) { used.delete(cur); this.deskOf.delete(s.key); }
+            continue;
+          }
+          if (cur != null) continue; // that zone is full: stay where it is
+        } else if (cur != null) continue;
         const i = order.find((n) => !used.has(n));
         if (i == null) continue;
         this.deskOf.set(s.key, i);
@@ -638,7 +686,7 @@
         weighted.push([q, w]);
       }
       for (const d of plan.noNap ? [] : plan.desks) {
-        if (workingDesks.has(d) || d.napper) continue;
+        if (workingDesks.has(d) || d.napper || d.spot) continue;
         weighted.push([{ x: d.seat.x, y: d.seat.y, act: 'nap', face: d.side === 'n' ? 'front' : 'back', sit: 0.34, desk: d }, sleepy ? 3 : 0.25]);
       }
       if (!weighted.length) return;
@@ -1664,6 +1712,7 @@
       }
       const items = [...this.plan.items];
       for (const dk of this.plan.desks) {
+        if (dk.spot) continue;
         const p = occupant.get(dk);
         items.push({ depth: dk.x + 0.7 + dk.y + 0.4, draw: () => this.desk(dk, p) });
         items.push({ depth: dk.seat.x + dk.seat.y - 0.06, draw: () => this.chair(dk, p) });

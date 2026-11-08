@@ -238,6 +238,30 @@ Session names on tags (on by default) tags show the session's name (yours or
 its title) instead of the folder; give long sessions a short name with the
 pencil in the detail panel.
 
+### Where agents work: activity zones
+
+In rooms that have zones, what an agent is doing decides where it works:
+
+| Activity | Built-in office | Chiikawa forest village |
+|---|---|---|
+| Running commands, tests, builds | the pod by the server rack | the 토벌 field, facing a monster |
+| Editing files | left desks of the other pods | the laptop table |
+| Reading, searching, the web, the browser | the lounge bookshelf | the 노동 게시판 |
+| Sub-agents | ends of the meeting table | the weeding field |
+| Thinking or writing its reply | right desks, the whiteboard | the pond bank |
+| Waiting on you, or the request failed | out front, facing you | by the 토벌 warning sign |
+| Done | wanders (pantry, lounge…) | campfire, ramen stall, picnic, bench… |
+
+An agent moves only after the same activity has lasted 10 seconds, and not
+sooner than 20 seconds after its last move; waiting on you moves at once. When
+a zone is full it stays where it is. A scene pack opts in by giving its
+stations a `"zone"` (`run`, `write`, `research`, `delegate`, `think`,
+`attention`); packs without zones behave as before.
+
+In 3D the sky and light follow the clock: dawn (5–7), day, dusk (17–19) and
+night. Scene lamps and glows with `"night": true` light up from dusk to dawn.
+Add `?hour=18` to the address to preview a time of day.
+
 ### Your own 3D characters
 
 The 3D view can swap the stock characters for your own `.glb` models, per

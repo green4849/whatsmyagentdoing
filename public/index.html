@@ -499,6 +499,7 @@
 <div class="tip" id="tip"></div>
 <div class="ver" id="ver"></div>
 <script src="/i18n.js"></script>
+<script src="/zones.js"></script>
 <script src="/office.js"></script>
 <script src="/popout.js"></script>
 
@@ -591,6 +592,7 @@ if (PIP) document.body.classList.add('pip');
     if (ACCOUNT) keep.set('account', ACCOUNT);
     if (FOLDER) keep.set('folder', FOLDER);
     if (AGENT) keep.set('agent', AGENT);
+    if (q.get('hour')) keep.set('hour', q.get('hour')); // previews a time of day in 3D
     history.replaceState(null, '', location.pathname + (keep.size ? `?${keep}` : ''));
   }
 }

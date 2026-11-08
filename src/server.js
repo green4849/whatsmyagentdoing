@@ -114,31 +114,53 @@ function summary(sessions, now) {
   return out;
 }
 
-// account: show only sessions of one Claude account (see accounts.js); defaults to --account.
-function snapshot(watcher, opts, account = opts.account) {
+// Which sessions one office shows. Each part is optional; together they all must match.
+//   account: one Claude account (see accounts.js)
+//   folder:  comma-separated folders, each a folder name or the end of its path
+//   agent:   comma-separated agent ids (claude, codex, gemini, ...)
+const splitList = (v) => String(v || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean).slice(0, 50);
+function normFilter(f) {
+  return { account: String(f.account || '').slice(0, 100), folder: splitList(f.folder), agent: splitList(f.agent) };
+}
+function matchFolder(list, cwd) {
+  if (!list.length) return true;
+  if (!cwd) return false;
+  const p = cwd.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const name = p.slice(p.lastIndexOf('/') + 1);
+  return list.some((f) => {
+    const q = f.replace(/\\/g, '/').replace(/\/+$/, '');
+    return q.includes('/') ? p === q || p.endsWith(q.startsWith('/') ? q : `/${q}`) : name === q;
+  });
+}
+const DEFAULT_FILTER = (opts) => ({ account: opts.account, folder: opts.folder, agent: opts.agent });
+
+// filter: an object as above, or just an account; defaults to --account / --folder / --agent.
+function snapshot(watcher, opts, filter = DEFAULT_FILTER(opts)) {
+  const f = normFilter(typeof filter === 'string' ? { ...DEFAULT_FILTER(opts), account: filter } : filter);
   const now = Date.now();
   const raw = watcher.sessions();
-  const sessions = raw.map((s) => view(s, now, opts)).filter((s) => matchAccount(account, s.account));
+  const sessions = raw.map((s) => view(s, now, opts)).filter((s) => matchAccount(f.account, s.account)
+    && matchFolder(f.folder, s.cwd) && (!f.agent.length || f.agent.includes(s.agent)));
   sessions.sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
-  return { now, lang: opts.demo ? null : promptLanguage(raw), account: account || null, sessions, summary: summary(sessions, now) };
+  return { now, lang: opts.demo ? null : promptLanguage(raw), account: f.account || null, folder: f.folder, agent: f.agent, sessions, summary: summary(sessions, now) };
 }
 
-// ?account= on the page or API overrides --account; an empty value shows everyone.
-function accountParam(url, opts) {
-  const q = url.searchParams.get('account');
-  return (q === null ? opts.account : q.slice(0, 100)) || '';
+// ?account= / ?folder= / ?agent= on the page or API override the command line; an empty value shows everyone.
+function filterParams(url, opts) {
+  const pick = (k) => { const q = url.searchParams.get(k); return q === null ? opts[k] : q.slice(0, 2000); };
+  return normFilter({ account: pick('account'), folder: pick('folder'), agent: pick('agent') });
 }
 
 function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
-  const clients = new Map(); // response -> account filter
-  const last = new Map();    // account filter -> last body signature
+  const clients = new Map(); // response -> filter key (JSON of normFilter)
+  const last = new Map();    // filter key -> last body signature
 
   const push = (force) => {
-    // One snapshot per distinct filter, so many windows on one account cost one.
+    // One snapshot per distinct filter, so many windows on one office cost one.
     const bodies = new Map();
     for (const account of new Set(clients.values())) {
       let body;
-      try { body = JSON.stringify(snapshot(watcher, opts, account)); } catch (e) { console.error('snapshot failed:', e.message); return; }
+      try { body = JSON.stringify(snapshot(watcher, opts, JSON.parse(account))); } catch (e) { console.error('snapshot failed:', e.message); return; }
       // Compare without the timestamp so idle ticks don't spam clients.
       const sig = body.replace(/^\{"now":\d+,/, '{');
       if (!force && sig === last.get(account)) continue;
@@ -205,7 +227,7 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
       res.end(JSON.stringify(messages ? { messages } : { messages: [], private: !!opts.privacy }));
     } else if (url.pathname === '/api/sessions') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(snapshot(watcher, opts, accountParam(url, opts))));
+      res.end(JSON.stringify(snapshot(watcher, opts, filterParams(url, opts))));
     } else if (url.pathname === '/api/shutdown' && req.method === 'POST') {
       // Only our CLI sends this header; a web page can't add a custom header
       // to a cross-site request without a CORS preflight, which we never allow.
@@ -243,9 +265,9 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
         'cache-control': 'no-store',
         connection: 'keep-alive',
       });
-      const account = accountParam(url, opts);
-      res.write(`data: ${JSON.stringify(snapshot(watcher, opts, account))}\n\n`);
-      clients.set(res, account);
+      const filter = filterParams(url, opts);
+      res.write(`data: ${JSON.stringify(snapshot(watcher, opts, filter))}\n\n`);
+      clients.set(res, JSON.stringify(filter));
       req.on('close', () => clients.delete(res));
     } else {
       res.writeHead(404).end();
@@ -254,4 +276,4 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
   return server;
 }
 
-module.exports = { createServer, snapshot };
+module.exports = { createServer, snapshot, matchFolder };

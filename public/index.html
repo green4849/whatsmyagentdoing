@@ -564,6 +564,10 @@ function readPreferences() {
 const PIP = new URLSearchParams(location.search).get('pip') === '1';
 // ?account=<label|id|none> shows one Claude account's sessions; kept in the URL so reloads and pop-outs keep it.
 const ACCOUNT = (new URLSearchParams(location.search).get('account') || '').slice(0, 100);
+// ?folder=a,b (folder names, path endings, full paths or your renamed names) and
+// ?agent=codex make an office of just those sessions; also kept in the URL.
+const FOLDER = (new URLSearchParams(location.search).get('folder') || '').slice(0, 2000);
+const AGENT = (new URLSearchParams(location.search).get('agent') || '').slice(0, 200);
 if (PIP) document.body.classList.add('pip');
 
 // ?view=office&quality=high&scene=pirate (what `--scene` opens) sets the prefs.
@@ -579,6 +583,8 @@ if (PIP) document.body.classList.add('pip');
     const keep = new URLSearchParams();
     if (PIP) keep.set('pip', '1');
     if (ACCOUNT) keep.set('account', ACCOUNT);
+    if (FOLDER) keep.set('folder', FOLDER);
+    if (AGENT) keep.set('agent', AGENT);
     history.replaceState(null, '', location.pathname + (keep.size ? `?${keep}` : ''));
   }
 }
@@ -735,6 +741,7 @@ function folderGroups(list) {
   }).sort((a, b) => a.rank - b.rank || b.last - a.last);
 }
 const CHEVRON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5l6.5 6.5L9 18.5"/></svg>';
+const OPEN_ICON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 const PENCIL = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
 function folderHead(g, all) {
   const s0 = g.items[0];
@@ -752,6 +759,7 @@ function folderHead(g, all) {
   return `<div class="fgroup${folded ? ' folded' : ''}" style="--fc:${color || 'transparent'}">
     <button class="fold" data-fold="${esc(g.key)}" aria-expanded="${!folded}">${CHEVRON}<span class="fname" title="${esc(s0.cwd || '')}">${esc(projectName(s0))}${parent ? `<small> · ${esc(parent)}</small>` : ''}</span><span class="fcount">${g.items.length}</span>${dots}</button>
     ${accounts.map(accountChip).join('')}
+    ${s0.cwd ? `<button class="fbtn" data-open="${esc(g.key)}" title="${esc(T('openOffice'))}" aria-label="${esc(T('openOffice'))}">${OPEN_ICON}</button>` : ''}
     <button class="fbtn" data-rename="${esc(g.key)}" title="${esc(T('renameFolder'))}" aria-label="${esc(T('renameFolder'))}">${PENCIL}</button>
     <label class="fbtn fswatch" title="${esc(T('folderColor'))}"><input type="color" data-color="${esc(g.key)}" value="${esc(color || tagColor(s0) || '#8a8a85')}" aria-label="${esc(T('folderColor'))}"></label>
     ${color ? `<button class="fbtn freset" data-reset="${esc(g.key)}" title="${esc(T('resetColor'))}" aria-label="${esc(T('resetColor'))}">×</button>` : ''}
@@ -788,6 +796,30 @@ function startRename(key) {
   name.replaceWith(input);
   input.focus();
   input.select();
+}
+
+// A folder you renamed is known to this page only, so ask the server for its path.
+function serverFolders(list) {
+  return list.split(',').map((x) => x.trim()).filter(Boolean).flatMap((item) => {
+    const paths = Object.keys(folders.names).filter((k) => folders.names[k].toLowerCase() === item.toLowerCase());
+    return paths.length ? paths : [item];
+  }).join(',');
+}
+// How this window is scoped, for its title: "Max · CV_v3 · Codex".
+function officeScope() {
+  const folderLabel = (f) => folders.names[f] || f.split(/[\\/]/).filter(Boolean).pop() || f;
+  const agents = AGENT.split(',').map((a) => a.trim()).filter(Boolean).map((a) => AGENT_NAME[a] || a);
+  return [ACCOUNT, FOLDER.split(',').map((f) => f.trim()).filter(Boolean).map(folderLabel).join(', '), agents.join(', ')].filter(Boolean).join(' · ');
+}
+// A small window with only this folder's office, like a pop-out (several can be tiled).
+function openFolderOffice(key) {
+  const url = new URL('/', location.href);
+  url.searchParams.set('pip', '1');
+  url.searchParams.set('folder', key);
+  if (ACCOUNT) url.searchParams.set('account', ACCOUNT);
+  if (AGENT) url.searchParams.set('agent', AGENT);
+  url.searchParams.set('prefs', JSON.stringify(Object.fromEntries(Object.keys(PREF_DEFAULTS).map((k) => [k, state[k]]))));
+  window.open(url.href, `wmad-${key}`.replace(/[^\w-]/g, '_').slice(0, 100), 'popup,width=560,height=440');
 }
 
 function card(s, now) {
@@ -839,7 +871,7 @@ function render() {
   renderSide();
   const working = count((s) => ACTIVE.has(s));
   const needs = count(GROUPS[0].match);
-  document.title = (needs ? `(${needs}!) ` : working ? `(${working}) ` : '') + (ACCOUNT ? `${ACCOUNT} · ` : '') + L.title;
+  document.title = (needs ? `(${needs}!) ` : working ? `(${working}) ` : '') + (officeScope() ? `${officeScope()} · ` : '') + L.title;
 
   const main = document.getElementById('main');
   const officeMode = state.view === 'office' || state.full;
@@ -953,7 +985,11 @@ function chime(kind) {
 }
 
 function connect() {
-  const es = new EventSource(ACCOUNT ? `/events?account=${encodeURIComponent(ACCOUNT)}` : '/events');
+  const q = new URLSearchParams();
+  if (ACCOUNT) q.set('account', ACCOUNT);
+  if (FOLDER) q.set('folder', serverFolders(FOLDER));
+  if (AGENT) q.set('agent', AGENT);
+  const es = new EventSource(q.size ? `/events?${q}` : '/events');
   const conn = document.getElementById('conn');
   es.onmessage = (e) => { conn.classList.remove('on'); onData(JSON.parse(e.data)); };
   es.onerror = () => conn.classList.add('on');
@@ -1057,7 +1093,9 @@ const officeOpts = {
   onFrame: (renderer) => popout?.drawPreview(renderer),
   tagColor,
   label: (s) => {
-    const name = (s.agent === 'omp' && s.subagent && s.title) || projectName(s);
+    // In a one-folder office every tag would repeat the folder, so name the session instead.
+    const oneFolder = FOLDER && !FOLDER.includes(',');
+    const name = (s.agent === 'omp' && s.subagent && s.title) || (oneFolder ? s.title || AGENT_NAME[s.agent] || s.agent : projectName(s));
     return accountName(s) ? `${name} · ${accountName(s)}` : name;
   },
   onHover(s, at, click) {
@@ -1470,6 +1508,8 @@ document.getElementById('sideRows').addEventListener('click', (e) => {
     if (!folders.folded.delete(k)) folders.folded.add(k);
     saveFolders(); renderNow(); return;
   }
+  const open = e.target.closest('[data-open]');
+  if (open) { openFolderOffice(open.dataset.open); return; }
   const rename = e.target.closest('[data-rename]');
   if (rename) { startRename(rename.dataset.rename); return; }
   const reset = e.target.closest('[data-reset]');

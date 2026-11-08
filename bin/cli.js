@@ -26,6 +26,9 @@ Options:
   --private         Hide prompts, replies and titles; show status only
   --account <name>  Only Claude sessions of one account (a WMAD_ACCOUNT_LABELS label,
                     an account id prefix, or "none"); pages can use ?account= instead
+  --folder <list>   Only sessions in these folders (comma-separated folder names or
+                    path endings, e.g. CV_v3,26-2/음성학회); pages can use ?folder=
+  --agent <list>    Only these agents (e.g. codex, or claude,codex); pages can use ?agent=
   --json            Print one snapshot as JSON and exit
   --demo            Show a made-up team instead of your sessions
   --stop            Stop a running dashboard
@@ -83,6 +86,12 @@ function parseArgs(argv) {
       o.account = argv[++i];
     }
     else if (a.startsWith('--account=')) o.account = a.slice(10);
+    else if (a === '--folder' || a === '--agent') {
+      if (!argv[i + 1] || argv[i + 1].startsWith('--')) { console.error(`${a} requires a value`); process.exit(1); }
+      o[a.slice(2)] = argv[++i];
+    }
+    else if (a.startsWith('--folder=')) o.folder = a.slice(9);
+    else if (a.startsWith('--agent=')) o.agent = a.slice(8);
     else if (a === '--json') o.json = true;
     else if (a === '--demo') o.demo = true;
     else if (a === '--stop') o.stop = true;

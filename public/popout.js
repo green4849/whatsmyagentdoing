@@ -97,8 +97,10 @@
       frame.title = this.text('title');
       const url = new URL('/', location.href);
       url.searchParams.set('pip', '1');
-      const account = new URLSearchParams(location.search).get('account');
-      if (account) url.searchParams.set('account', account);
+      for (const k of ['account', 'folder', 'agent']) {
+        const v = new URLSearchParams(location.search).get(k);
+        if (v) url.searchParams.set(k, v);
+      }
       // Carry the current settings even if storage is unavailable. The page
       // validates these preferences before using them.
       url.searchParams.set('prefs', JSON.stringify(this.preferences()));

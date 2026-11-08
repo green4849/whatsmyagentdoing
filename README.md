@@ -85,6 +85,8 @@ store and isn't supported yet; its `agy` CLI is.)
 --no-open         Don't open the browser
 --private         Hide prompts, replies and titles — status only (screen-share safe)
 --account <name>  Only Claude sessions of one account (label, id prefix or "none"); see Claude accounts
+--folder <list>   Only sessions in these folders (names or path endings, comma-separated)
+--agent <list>    Only these agents, e.g. codex
 --json            Print one snapshot as JSON and exit
 --demo            Show a made-up team instead of your sessions (screenshots, trying it out)
 --stop            Stop a running dashboard (or say /myoffice stop)
@@ -194,6 +196,21 @@ double-click it) or pick its name-tag colour; an empty name or × restores the
 default. Folder names and colours apply to the office name tags too, and a
 folder colour wins over an account colour. They are kept in this browser, per
 port, keyed by the folder's full path.
+
+### One office per folder, account or agent
+
+`?folder=`, `?account=` and `?agent=` each narrow an office, and they combine:
+
+- `/?folder=CV_v3` — one folder; `?folder=CV_v3,CV_web` puts several in one office
+- `/?folder=26-2/음성학회` — a path ending tells apart folders with the same name
+- `/?agent=codex` — only Codex; `/?folder=CV_v3&agent=claude,codex`
+- `/?account=Max&folder=CV_v3`
+
+A folder you renamed in the side panel works by its new name too. Every
+window keeps its filter through reloads and pop-outs, and its title starts
+with it. In folder mode, the arrow button on a folder opens a small window
+with just that folder's office; open several and tile them. One server
+serves all of these windows. `--folder` and `--agent` set the defaults.
 
 ### Magpie (optional)
 

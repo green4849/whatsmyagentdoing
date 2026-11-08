@@ -210,6 +210,18 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#1c1c1a' : '#ffffff';
   }
 
+  // Status ring under a person's feet, so state reads at a glance:
+  // green while working, amber (pulsing) when it needs you, red (pulsing) when
+  // the last turn failed; dashed when an active session has gone quiet (stuck).
+  const RING = { working: '#3fb950', waiting: '#f0a93a', failed: '#e5484d' };
+  function ringFor(s) {
+    if (!s) return null;
+    if (s.status === 'error' || (s.outcome && s.outcome.kind === 'failed')) return { color: RING.failed, pulse: true };
+    if (s.status === 'waiting') return { color: RING.waiting, pulse: true, dashed: s.stuck > 0 };
+    if (s.status === 'thinking' || s.status === 'tool' || s.status === 'typing') return { color: RING.working, dashed: s.stuck > 0 };
+    return null;
+  }
+
   class Office {
     constructor(root, { onHover, label, tagColor, onFrame, saver, showAgent = true, compact = false } = {}) {
       this.root = root;
@@ -685,6 +697,30 @@
       // While the inset eases, follow it exactly; otherwise settle gently.
       if (!this.cam || this.insetMoving()) this.cam = want;
       else for (const k of ['zoom', 'ox', 'oy']) this.cam[k] += (want[k] - this.cam[k]) * 0.1;
+    }
+
+    // Draws the status ring centred at (x, y); k scales it (1 = 2D size).
+    statusRing(x, y, k, s) {
+      const ring = ringFor(s);
+      if (!ring) return;
+      const c = this.ctx, t = this.t / 1000;
+      const pulse = ring.pulse ? 0.5 + 0.5 * Math.sin(t * 4) : 0;
+      const rx = 13 * k * (1 + 0.15 * pulse), ry = rx / 2;
+      c.save();
+      c.globalAlpha = 0.25 + 0.15 * pulse;
+      c.fillStyle = ring.color;
+      c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.fill();
+      // A dark halo first, so the ring reads on light floors and grass alike.
+      c.globalAlpha = 0.35;
+      c.strokeStyle = '#000';
+      c.lineWidth = 4 * k;
+      c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.stroke();
+      c.globalAlpha = 0.95;
+      c.strokeStyle = ring.color;
+      c.lineWidth = 2 * k;
+      if (ring.dashed) { c.setLineDash([5 * k, 4 * k]); c.lineDashOffset = -t * 10 * k; }
+      c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.stroke();
+      c.restore();
     }
 
     // The room's box on screen (CSS px, padded), for cropping the video pop-out. 2D only.
@@ -1643,6 +1679,8 @@
         else it.draw();
       }
       this.pingPongBall();
+      // Status rings go over the furniture, so desks and chairs never hide them.
+      for (const [p] of heads) { const fb = this.iso(p.x, p.y, 0); this.statusRing(fb.x, fb.y, 1, p.s); }
       if (this.compact) {
         // Keep labels readable when the room is scaled down for PiP.
         c.save();

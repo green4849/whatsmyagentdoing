@@ -122,6 +122,8 @@
     .agent-logo.mono { filter: invert(1); }
   }
   .acct { flex: none; padding: 1px 6px; margin-left: 4px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .dfail { margin: 8px 0 4px; padding: 8px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--error) 50%, transparent); background: color-mix(in srgb, var(--error) 10%, transparent); font-size: 12.5px; line-height: 1.45; }
+  .dfail b { color: var(--error); margin-right: 4px; }
   .srow .badge { flex: none; margin-right: 4px; color: var(--s); font-weight: 700; }
   .acct[style] { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 18%, transparent); }
   .project { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -838,7 +840,9 @@ function openFolderOffice(key) {
 // while it is active and is then freed for the next one.
 const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 const badges = new Map(); // session key -> number
-const needsYou = (s) => s.status === 'waiting' || s.status === 'error';
+// A finished turn that didn't do what was asked (server: outcome.kind 'failed'), or an API error.
+const failed = (s) => s.status === 'error' || s.outcome?.kind === 'failed';
+const needsYou = (s) => s.status === 'waiting' || failed(s);
 const isActiveRow = (s) => !s.subagent && (needsYou(s) || ACTIVE.has(s.status));
 function updateBadges(list) {
   const active = list.filter(isActiveRow);
@@ -857,6 +861,8 @@ const badgeChar = (s) => (badges.has(s.key) ? CIRCLED[badges.get(s.key) - 1] : '
 // What a name tag says: the session's own name (yours or its title) when
 // "Session names on tags" is on, else the folder.
 const tagName = (s) => (state.tagSession ? customName(s) || s.title || projectName(s) : customName(s) || projectName(s));
+const statusLabel = (s) => (failed(s) && s.status !== 'error' ? T('failed') : L[s.status] || s.status);
+const statusCol = (s) => (failed(s) ? 'var(--error)' : statusColor(s.status));
 // Canvas can't read CSS variables; resolve var(--x) to its current colour.
 const cssColor = (v) => { const m = /^var\((--[\w-]+)\)$/.exec(v); return m ? getComputedStyle(document.body).getPropertyValue(m[1]).trim() || '#888' : v; };
 // The pop-out's list: who needs you, then who is working, numbered like the tags.
@@ -864,7 +870,7 @@ function popoutStrip() {
   const list = visible();
   const rows = list.filter(isActiveRow).sort((a, b) => Number(needsYou(b)) - Number(needsYou(a)) || (badges.get(a.key) || 99) - (badges.get(b.key) || 99))
     .map((s) => ({ badge: badgeChar(s), name: titleName(s) || projectName(s), folder: projectName(s),
-      status: L[s.status] || s.status, color: cssColor(statusColor(s.status)), act: s.stuck ? L.stuck(s.stuck) : s.activity || '' }));
+      status: statusLabel(s), color: cssColor(statusCol(s)), act: failed(s) ? s.outcome?.detail || s.error || '' : s.stuck ? L.stuck(s.stuck) : s.activity || '' }));
   const count = (f) => list.filter((s) => !s.subagent && f(s)).length;
   return { rows, counts: [[L.needsYou, count(needsYou), cssColor(statusColor('waiting'))], [L.working, count((s) => ACTIVE.has(s.status)), cssColor(statusColor('tool'))],
     [L.finished, count((s) => s.status === 'done' || s.status === 'interrupted'), cssColor(statusColor('done'))]], quiet: T('pipQuiet') };
@@ -1454,11 +1460,11 @@ function renderSide() {
   // By status a row is named after its session when it has a name, with the folder after it.
   const row = (s, i, name, inFolder, chip = true) => {
     const folder = !inFolder && name !== projectName(s) ? `<small> · ${esc(projectName(s))}</small>` : '';
-    const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || (inFolder || s.title === name ? '' : s.title) || '';
-    return `<button class="srow${s.subagent ? ' sub' : ''}${inFolder ? ' infolder' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i, 14)}">
-        ${agentLogo(s.agent) || '<span></span>'}<span class="nm">${badgeChar(s) ? `<b class="badge" style="--s:${statusColor(s.status)}">${badgeChar(s)}</b>` : ''}<span class="nmt">${esc(name)}${folder}</span>${chip ? accountChip(s) : ''}</span>
+    const act = failed(s) ? s.outcome?.detail || s.error || '' : s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || (inFolder || s.title === name ? '' : s.title) || '';
+    return `<button class="srow${s.subagent ? ' sub' : ''}${inFolder ? ' infolder' : ''}" data-key="${esc(s.key)}" style="--s:${statusCol(s)};--i:${Math.min(i, 14)}">
+        ${agentLogo(s.agent) || '<span></span>'}<span class="nm">${badgeChar(s) ? `<b class="badge" style="--s:${statusCol(s)}">${badgeChar(s)}</b>` : ''}<span class="nmt">${esc(name)}${folder}</span>${chip ? accountChip(s) : ''}</span>
         <span class="tm" data-time="${esc(s.key)}"></span>
-        <span class="st"><i></i><b>${esc(L[s.status] || s.status)}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
+        <span class="st"><i></i><b>${esc(statusLabel(s))}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
   };
   const rows = state.sideGroup === 'folder'
     ? folderGroups(list).map((g, _, all) => folderHead(g, all)
@@ -1531,7 +1537,8 @@ function renderDetail(scrollDown) {
   const resume = resumeCmd(s);
   const html = `
     ${customName(s) && s.title ? `<div class="dtitle">${esc(s.title)}</div>` : !titleName(s) || s.title === projectName(s) ? '' : `<div class="dtitle">${esc(projectName(s))}</div>`}
-    <div class="dstatus" style="--s:${statusColor(s.status)}"><i></i><b>${esc(L[s.status] || s.status)}</b>${s.activity ? `<span class="act">${esc(s.activity)}</span>` : ''}${s.stuck ? `<span class="stuck">${esc(L.stuck(s.stuck))}</span>` : ''}</div>
+    <div class="dstatus" style="--s:${statusCol(s)}"><i></i><b>${esc(statusLabel(s))}</b>${s.activity ? `<span class="act">${esc(s.activity)}</span>` : ''}${s.stuck ? `<span class="stuck">${esc(L.stuck(s.stuck))}</span>` : ''}</div>
+    ${s.outcome?.kind === 'failed' && (s.outcome.detail || s.outcome.action) ? `<div class="dfail">${s.outcome.detail ? `<div><b>${esc(T('failReason'))}</b> ${esc(s.outcome.detail)}</div>` : ''}${s.outcome.action ? `<div><b>${esc(T('failAction'))}</b> ${esc(s.outcome.action)}</div>` : ''}</div>` : ''}
     <dl class="dmeta">
       <dt>${esc(L.modelL)}</dt><dd>${esc(s.model || '—')}${s.subagent ? ` · ${esc(L.sub)}` : ''}</dd>
       ${s.account ? `<dt>${esc(L.accountL || 'Account')}</dt><dd title="${esc(s.account.id)}">${esc(s.account.label)}</dd>` : ''}

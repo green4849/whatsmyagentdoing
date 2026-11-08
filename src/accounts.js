@@ -55,6 +55,7 @@ class AccountIndex {
     this.labels = readLabels(labels);
     this.files = new Map();    // metadata file -> { mtime, size, account, ids }
     this.bySession = new Map(); // transcript id -> account uuid
+    this.summaries = new Map(); // current transcript id -> the app's summary of its last turn
   }
 
   // { label, color? } for an account uuid; unlabelled accounts show their short id.
@@ -82,13 +83,14 @@ class AccountIndex {
           try { st = fs.statSync(file); } catch { continue; }
           const old = this.files.get(file);
           if (old && old.mtime === st.mtimeMs && old.size === st.size) continue;
-          let ids = [];
+          let ids = [], summary = null;
           try {
             const d = JSON.parse(fs.readFileSync(file, 'utf8'));
             ids = [d.cliSessionId, ...(Array.isArray(d.priorCliSessionIds) ? d.priorCliSessionIds : [])]
               .filter((x) => typeof x === 'string' && x);
+            summary = turnSummary(d);
           } catch { /* half-written; picked up on the next scan */ }
-          this.files.set(file, { mtime: st.mtimeMs, size: st.size, account: account.name.toLowerCase(), ids });
+          this.files.set(file, { mtime: st.mtimeMs, size: st.size, account: account.name.toLowerCase(), ids, summary });
           changed = true;
         }
       }
@@ -98,9 +100,20 @@ class AccountIndex {
     }
     if (changed) {
       this.bySession.clear();
-      for (const { account, ids } of this.files.values()) for (const id of ids) this.bySession.set(id, account);
+      this.summaries.clear();
+      for (const { account, ids, summary } of this.files.values()) {
+        for (const id of ids) this.bySession.set(id, account);
+        if (summary && ids[0]) this.summaries.set(ids[0], summary);
+      }
     }
     return changed;
+  }
+
+  // The desktop app's own verdict on a session's last turn, written when the
+  // turn ends: { category: 'completed' | 'review_ready' | 'blocked' | ..., detail,
+  // action, forUuid } (forUuid is the assistant message it summarises).
+  summary(sessionId) {
+    return (sessionId && this.summaries.get(sessionId)) || null;
   }
 
   // { id, label, color? } for a transcript id, or null when no desktop session names it.
@@ -108,6 +121,14 @@ class AccountIndex {
     const account = sessionId && this.bySession.get(sessionId);
     return account ? { id: account.slice(0, 8), ...this.label(account) } : null;
   }
+}
+
+function turnSummary(d) {
+  const p = d && d.postTurnSummary;
+  if (!p || typeof p !== 'object' || typeof p.status_category !== 'string') return null;
+  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+  return { category: p.status_category, detail: str(p.status_detail, 200), action: str(p.needs_action, 200),
+    forUuid: str(p.summarizes_uuid || d.postTurnSummaryFor, 80) };
 }
 
 function list(dir) {

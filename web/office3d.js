@@ -1327,12 +1327,14 @@ export class Office3D extends window.Office {
       const top = (st.pose === 'sit' ? this.seatHeight(p.x, p.y, st.sitZ) + h * (a.procedural ? 0.94 : 0.8) : base + h) + floatUp;
       v.set(p.x, top + 0.05, p.y).project(this.camera);
       const sx = (v.x + 1) / 2 * this.cw, sy = (1 - v.y) / 2 * this.ch;
-      const foot = new THREE.Vector3(p.x, 0, p.y).project(this.camera);
+      const foot = new THREE.Vector3(p.x, base, p.y).project(this.camera);
       const fy = (1 - foot.y) / 2 * this.ch;
-      heads.push([p, { x: sx, y: sy, act: st.act }, v.z]);
+      // Ground position for the status ring (drawn on the 2D overlay).
+      heads.push([p, { x: sx, y: sy, act: st.act, foot: { x: (foot.x + 1) / 2 * this.cw, y: fy, k: Math.max(0.5, (fy - sy) / 30) } }, v.z]);
       this.hit.push({ key: p.key, x0: sx - 18, x1: sx + 18, y0: sy - 24, y1: fy + 4 });
     }
     heads.sort((a, b) => b[2] - a[2]);
+    for (const [p, at] of heads) this.statusRing(at.foot.x, at.foot.y, at.foot.k, p.s);
     for (const [p, at] of heads) this.bubble(p, at);
     if (this.offDuty > 0) {
       c.font = '600 11px ui-sans-serif, system-ui, -apple-system, "PingFang TC", sans-serif';

@@ -145,6 +145,11 @@ function describeClaudeTool(name, input = {}) {
   }
 }
 
+// A refused tool call: a permission rule, the auto-mode classifier or you saying no.
+const DENIED = /permission[^.\n]{0,60}denied|denied by|doesn't want to proceed|was rejected|not allowed to/i;
+const toolText = (content) => (typeof content === 'string' ? content
+  : Array.isArray(content) ? content.filter((x) => x && x.type === 'text').map((x) => x.text).join('\n') : '');
+
 function applyClaude(s, d) {
   const ts = stamp(s, d.timestamp);
   if (d.cwd) s.cwd = d.cwd;
@@ -175,6 +180,10 @@ function applyClaude(s, d) {
       const c = d.message?.content;
       if (Array.isArray(c) && c.some((x) => x.type === 'tool_result')) {
         // Tool finished (or you answered its question); model reads the result.
+        // Remember whether the latest tool call was refused: if the turn ends
+        // right after, what you asked for was not done (see watcher outcome).
+        const denied = c.find((x) => x.type === 'tool_result' && x.is_error && DENIED.test(toolText(x.content)));
+        s._lastToolDenied = denied ? clean(toolText(denied.content), 160) : null;
         set(s, 'thinking');
         return;
       }
@@ -187,6 +196,7 @@ function applyClaude(s, d) {
       const cmd = text.match(/<command-name>([^<]+)<\/command-name>/);
       const isNotification = text.trimStart().startsWith('<task-notification>');
       if (!isNotification) {
+        s._lastToolDenied = null;
         s.prompt = cmd ? cmd[1].trim() : clean(text);
         if (!s.title && d.isSidechain) s.title = clean(text, 80);
         s.reply = null;
@@ -198,6 +208,7 @@ function applyClaude(s, d) {
     }
     case 'assistant': {
       const m = d.message || {};
+      if (d.uuid) s._lastAssistantUuid = d.uuid;
       if (m.model && m.model !== '<synthetic>') s.model = m.model;
       // One API response is logged once per content block with the same usage.
       const u = m.usage;

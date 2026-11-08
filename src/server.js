@@ -64,6 +64,8 @@ function view(s, now, { privacy }) {
     title: s.title,
     model: s.model,
     account: s.account || null,
+    // A finished turn that didn't do what was asked (see watcher claudeOutcome).
+    outcome: s.outcome || null,
     status,
     stuck,
     context: s.context ? { used: s.context, window: s.contextWindow || null } : null,
@@ -83,6 +85,7 @@ function view(s, now, { privacy }) {
   }
   if (privacy) {
     out.prompt = out.reply = out.title = null;
+    if (out.outcome) out.outcome = { kind: out.outcome.kind, detail: null, action: null, source: out.outcome.source };
     if (out.activity) out.activity = out.activity.split(/[:\s]/)[0];
   }
   return out;

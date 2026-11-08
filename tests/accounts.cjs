@@ -120,8 +120,11 @@ test('the watcher labels Claude sessions and subagents from the desktop metadata
   const user = line({ type: 'user', timestamp: at(5000), cwd: '/w/p', message: { role: 'user', content: 'hi' } });
   fs.writeFileSync(path.join(proj, 'sess-a.jsonl'), user);
   fs.writeFileSync(path.join(proj, 'sess-a/subagents/agent-1.jsonl'), user);
+  fs.writeFileSync(path.join(proj, 'sess-b.jsonl'), user);
   fs.writeFileSync(path.join(proj, 'sess-cli.jsonl'), user);
-  desktopSession(path.join(root, 'Library/Application Support/Claude/claude-code-sessions'), A, 'one', { cliSessionId: 'sess-a' });
+  const desktop = path.join(root, 'Library/Application Support/Claude/claude-code-sessions');
+  desktopSession(desktop, A, 'one', { cliSessionId: 'sess-a' });
+  desktopSession(desktop, B, 'two', { cliSessionId: 'sess-b' });
 
   const watcherPath = path.join(__dirname, '../src/watcher.js');
   const mod = { exports: {} };
@@ -135,5 +138,6 @@ test('the watcher labels Claude sessions and subagents from the desktop metadata
   const byId = Object.fromEntries(w.sessions().map((s) => [s.id, s.account]));
   assert.deepEqual(byId['sess-a'], { id: 'aaaa1111', label: 'Max' });
   assert.deepEqual(byId['agent-1'], { id: 'aaaa1111', label: 'Max' }, 'subagents inherit the parent account');
+  assert.deepEqual(byId['sess-b'], { id: 'bbbb2222', label: 'bbbb2222' }, 'the same folder can hold sessions of different accounts');
   assert.equal(byId['sess-cli'], null, 'terminal sessions have no desktop metadata');
 });

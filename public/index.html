@@ -240,6 +240,8 @@
   .srow:hover, .srow:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); outline: none; }
   .srow .agent-logo { width: 16px; height: 16px; margin: 0; }
   .srow .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+  .srow .nm { display: flex; align-items: center; }
+  .srow .nmt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .srow .tm { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
   .srow .st { grid-column: 2 / 4; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
   .srow .st i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--s); }
@@ -1231,7 +1233,7 @@ function renderSide() {
     return `<div class="side-group">${esc(L[g.key])} · ${items.length}</div>` + items.map((s, i) => {
       const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || s.title || '';
       return `<button class="srow${s.subagent ? ' sub' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i + (g.key === 'working' ? 3 : g.key === 'finished' ? 8 : 0), 14)}">
-        ${agentLogo(s.agent) || '<span></span>'}<span class="nm">${esc(s.project || AGENT_NAME[s.agent] || s.agent)}${accountChip(s)}</span>
+        ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(s.project || AGENT_NAME[s.agent] || s.agent)}</span>${accountChip(s)}</span>
         <span class="tm" data-time="${esc(s.key)}"></span>
         <span class="st"><i></i><b>${esc(L[s.status] || s.status)}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
     }).join('');

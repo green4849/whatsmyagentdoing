@@ -35,3 +35,18 @@ test('silent active sessions are flagged as stuck, with minutes, until they time
   assert.equal(by.e.stuck, 0, 'waiting for you is not stuck');
   assert.equal(by.f.status, 'idle'); assert.equal(by.f.stuck, 0);
 });
+
+test('private mode keeps how a turn ended but drops its words', () => {
+  const { snapshot } = require('../src/server');
+  const now = Date.now();
+  const s = (id, status, outcome, activity) => ({ agent: 'claude', id, status, outcome, activity, lastEventAt: now - 1000, cwd: '/w' });
+  const rows = snapshot({ sessions: () => [
+    s('a', 'done', { kind: 'failed', detail: '아직 배포하지 못했습니다.', action: '답변 확인', source: 'reply', sure: false }),
+    s('b', 'waiting', { kind: 'needs', detail: '1쪽으로 줄일까요?', action: '1쪽으로 줄일까요?', source: 'log', sure: true }, '1쪽으로 줄일까요?'),
+    s('c', 'waiting', null, 'Bash: rm -rf build')] }, { privacy: true }).sessions;
+  const by = Object.fromEntries(rows.map(r => [r.id, r]));
+  assert.deepEqual(by.a.outcome, { kind: 'failed', detail: null, action: null, source: 'reply', sure: false });
+  assert.equal(by.b.outcome.kind, 'needs');
+  assert.equal(by.b.activity, null, 'the question is conversation text');
+  assert.equal(by.c.activity, 'Bash', 'a tool name stays');
+});

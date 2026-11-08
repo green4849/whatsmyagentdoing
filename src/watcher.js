@@ -18,6 +18,7 @@ const { ompDirs, piDirs } = require('./omp');
 const hook = require('./hook');
 const { transcript } = require('./transcript');
 const { AccountIndex, desktopSessionsDir } = require('./accounts');
+const { claudeOutcome, codexOutcome } = require('./outcome');
 
 const HEAD_BYTES = 128 * 1024;
 const TAIL_BYTES = 768 * 1024;
@@ -226,22 +227,6 @@ function sameOMPPath(s, a, b) {
   s._ompPathKey = key;
   s._ompPathSame = path.resolve(a) === path.resolve(b) || real(a) === real(b);
   return s._ompPathSame;
-}
-
-// Did the last finished turn fail to do what was asked? Only once it is over:
-// the desktop app's own summary says it is blocked or failed (for this very
-// turn), or the last tool call before the end was refused.
-const SETTLED = new Set(['done', 'interrupted', 'idle']);
-const FAILED = /block|fail|error/i;
-function claudeOutcome(s, summary) {
-  if (s.subagent || !SETTLED.has(s.status)) return null;
-  if (summary && summary.forUuid && summary.forUuid === s._lastAssistantUuid) {
-    return FAILED.test(summary.category)
-      ? { kind: 'failed', detail: summary.detail || null, action: summary.action || null, source: 'desktop' }
-      : null;
-  }
-  if (s._lastToolDenied && s.status === 'done') return { kind: 'failed', detail: s._lastToolDenied, action: null, source: 'log' };
-  return null;
 }
 
 class Watcher extends EventEmitter {
@@ -661,6 +646,13 @@ class Watcher extends EventEmitter {
       // Subagent logs are named after themselves; their account is the parent's.
       if (s.agent === 'claude') s.account = this.accounts.lookup(s.subagent ? s.parentId : s.id);
       if (s.agent === 'claude') s.outcome = claudeOutcome(s, this.accounts.summary(s.id));
+      else if (s.agent === 'codex') s.outcome = codexOutcome(s);
+      // A turn that ended waiting on you (a question, or a step only you can
+      // take) shows as waiting, like a permission prompt.
+      if (s.outcome && s.outcome.kind === 'needs') {
+        out.push({ ...s, status: 'waiting', activity: s.outcome.action || s.outcome.detail || null });
+        continue;
+      }
       // A permission prompt from the optional Claude Code hook, until the log moves on.
       const wait = s.agent === 'claude' && !s.subagent && this.waiting.get(s.id);
       if (wait && wait.at > (s.lastEventAt || 0)) {

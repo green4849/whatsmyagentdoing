@@ -65,7 +65,7 @@ function view(s, now, { privacy }) {
     title: s.title,
     model: s.model,
     account: s.account || null,
-    // A finished turn that didn't do what was asked (see watcher claudeOutcome).
+    // How the last finished turn ended, when it failed or waits on you (see outcome.js).
     outcome: s.outcome || null,
     status,
     stuck,
@@ -86,8 +86,9 @@ function view(s, now, { privacy }) {
   }
   if (privacy) {
     out.prompt = out.reply = out.title = null;
-    if (out.outcome) out.outcome = { kind: out.outcome.kind, detail: null, action: null, source: out.outcome.source };
-    if (out.activity) out.activity = out.activity.split(/[:\s]/)[0];
+    if (out.outcome) out.outcome = { kind: out.outcome.kind, detail: null, action: null, source: out.outcome.source, sure: out.outcome.sure };
+    // A question the agent ended on is conversation text, not a tool name.
+    if (out.activity) out.activity = out.outcome?.kind === 'needs' ? null : out.activity.split(/[:\s]/)[0];
   }
   return out;
 }

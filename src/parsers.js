@@ -13,6 +13,7 @@
 //   interrupted, error, idle
 
 const path = require('path');
+const { lead, isQuestion } = require('./outcome');
 
 const WAITING_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
 
@@ -108,6 +109,15 @@ function set(s, status, activity) {
   if (status !== 'error') s.error = null;
 }
 
+// Per-turn signals the watcher's outcome rules read (see outcome.js).
+function resetTurnSignals(s) {
+  s._apiError = null;
+  s._refusal = false;
+  s._wrap = null;
+  s._lead = null;
+  s._question = null;
+}
+
 // ---------------------------------------------------------------- Claude Code
 
 function describeClaudeTool(name, input = {}) {
@@ -171,6 +181,12 @@ function applyClaude(s, d) {
     case 'system':
       if (d.subtype === 'stop_hook_summary') set(s, 'done', null);
       else if (d.subtype === 'api_error') {
+        // Claude Code retries on its own; most retries succeed. Only the
+        // assistant's final API error message ends the turn.
+        if (Number.isFinite(d.retryAttempt)) {
+          s.activity = `API 재시도 중 (${d.retryAttempt}/${Number.isFinite(d.maxRetries) ? d.maxRetries : '?'})`;
+          return;
+        }
         set(s, 'error', null);
         s.error = short(d.error?.formatted || d.error?.message || 'API error', 120);
       }
@@ -195,7 +211,9 @@ function applyClaude(s, d) {
       if (text.includes('<local-command-stdout>') || text.includes('<local-command-caveat>')) return;
       const cmd = text.match(/<command-name>([^<]+)<\/command-name>/);
       const isNotification = text.trimStart().startsWith('<task-notification>');
+      resetTurnSignals(s);
       if (!isNotification) {
+        s._askedQuestion = isQuestion(text.replace(/<[^>]+>/g, ' '));
         s._lastToolDenied = null;
         s.prompt = cmd ? cmd[1].trim() : clean(text);
         if (!s.title && d.isSidechain) s.title = clean(text, 80);
@@ -224,14 +242,19 @@ function applyClaude(s, d) {
         if (b.type === 'thinking' || b.type === 'redacted_thinking') set(s, 'thinking');
         else if (b.type === 'text') {
           s.reply = clean(b.text) || s.reply;
-          set(s, m.stop_reason === 'end_turn' || m.stop_reason === 'stop_sequence' ? 'done' : 'typing', null);
+          if (!d.isApiErrorMessage) s._lead = lead(b.text);
+          if (m.stop_reason === 'refusal') s._refusal = true;
+          set(s, m.stop_reason === 'end_turn' || m.stop_reason === 'stop_sequence' || m.stop_reason === 'refusal' ? 'done' : 'typing', null);
         } else if (b.type === 'tool_use') {
+          // The desktop app's wrap-up: the agent marks the turn as waiting on you.
+          if (b.name === 'mcp__ccd_turn__wrap_up') s._wrap = { blocked: b.input?.blocked === true, ask: clean(b.input?.ask, 120) };
           set(s, WAITING_TOOLS.has(b.name) ? 'waiting' : 'tool', describeClaudeTool(b.name, b.input));
         }
       }
       if (d.isApiErrorMessage) {
         set(s, 'error', null);
         s.error = s.reply;
+        s._apiError = { code: typeof d.error === 'string' ? d.error : null, message: s.reply, at: ts };
       }
       return;
     }
@@ -289,10 +312,19 @@ function applyCodex(s, d) {
           countTurn(s, ts);
           s.turnStartedAt = ts;
           s.reply = null;
+          resetTurnSignals(s);
           set(s, 'thinking', null);
           return;
         case 'task_complete':
-          if (p.last_agent_message) s.reply = clean(p.last_agent_message);
+          if (p.last_agent_message) { s.reply = clean(p.last_agent_message); s._lead = lead(p.last_agent_message); }
+          // A turn cut short by a usage limit or an overloaded model still
+          // ends with task_complete; the error rides along.
+          if (p.error && typeof p.error === 'object') {
+            set(s, 'error', null);
+            s.error = short(p.error.message || 'Error', 120);
+            s._apiError = { code: p.error.codex_error_info || null, message: p.error.message || '', at: ts };
+            return;
+          }
           set(s, 'done', null);
           return;
         case 'turn_aborted':
@@ -301,9 +333,11 @@ function applyCodex(s, d) {
         case 'error':
           set(s, 'error', null);
           s.error = short(p.message || 'Error', 120);
+          s._apiError = { code: p.codex_error_info || null, message: p.message || '', at: ts };
           return;
         case 'user_message':
           s.prompt = clean(p.message);
+          s._askedQuestion = isQuestion(String(p.message || '').split('## My request:').pop());
           set(s, 'thinking', null);
           return;
         case 'token_count': {
@@ -329,14 +363,19 @@ function applyCodex(s, d) {
           const started = p.type === 'item_started';
           switch (it.type) {
             case 'UserMessage': {
-              const text = clean(codexText(it.content));
-              if (text) s.prompt = text;
+              const raw = codexText(it.content);
+              const text = clean(raw);
+              if (text) { s.prompt = text; s._askedQuestion = isQuestion(raw.split('## My request:').pop()); }
               return;
             }
-            case 'AgentMessage':
+            case 'AgentMessage': {
               s.reply = clean(codexText(it.content)) || s.reply;
+              // A question card: the turn ends waiting on your choice.
+              const q = Array.isArray(it.questions) && it.questions.find((x) => x && x.title);
+              if (q) s._question = q.title;
               set(s, 'typing', null);
               return;
+            }
             case 'Reasoning':
               set(s, 'thinking');
               return;

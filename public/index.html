@@ -124,6 +124,7 @@
   .acct { flex: none; padding: 1px 6px; margin-left: 4px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
   .dfail { margin: 8px 0 4px; padding: 8px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--error) 50%, transparent); background: color-mix(in srgb, var(--error) 10%, transparent); font-size: 12.5px; line-height: 1.45; }
   .dfail b { color: var(--error); margin-right: 4px; }
+  .dfail .dguess { margin-top: 4px; color: var(--muted, inherit); opacity: .75; font-size: 11.5px; }
   .srow .badge { flex: none; margin-right: 4px; color: var(--s); font-weight: 700; }
   .acct[style] { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 18%, transparent); }
   .project { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -1543,7 +1544,7 @@ function renderDetail(scrollDown) {
   const html = `
     ${customName(s) && s.title ? `<div class="dtitle">${esc(s.title)}</div>` : !titleName(s) || s.title === projectName(s) ? '' : `<div class="dtitle">${esc(projectName(s))}</div>`}
     <div class="dstatus" style="--s:${statusCol(s)}"><i></i><b>${esc(statusLabel(s))}</b>${s.activity ? `<span class="act">${esc(s.activity)}</span>` : ''}${s.stuck ? `<span class="stuck">${esc(L.stuck(s.stuck))}</span>` : ''}</div>
-    ${s.outcome?.kind === 'failed' && (s.outcome.detail || s.outcome.action) ? `<div class="dfail">${s.outcome.detail ? `<div><b>${esc(T('failReason'))}</b> ${esc(s.outcome.detail)}</div>` : ''}${s.outcome.action ? `<div><b>${esc(T('failAction'))}</b> ${esc(s.outcome.action)}</div>` : ''}</div>` : ''}
+    ${s.outcome?.kind === 'failed' && (s.outcome.detail || s.outcome.action) ? `<div class="dfail">${s.outcome.detail ? `<div><b>${esc(T('failReason'))}</b> ${esc(s.outcome.detail)}</div>` : ''}${s.outcome.action ? `<div><b>${esc(T('failAction'))}</b> ${esc(s.outcome.action)}</div>` : ''}${s.outcome.source === 'reply' ? `<div class="dguess">${esc(T('failGuess'))}</div>` : ''}</div>` : ''}
     <dl class="dmeta">
       <dt>${esc(L.modelL)}</dt><dd>${esc(s.model || '—')}${s.subagent ? ` · ${esc(L.sub)}` : ''}</dd>
       ${s.account ? `<dt>${esc(L.accountL || 'Account')}</dt><dd title="${esc(s.account.id)}">${esc(s.account.label)}</dd>` : ''}

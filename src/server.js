@@ -21,6 +21,7 @@ const updater = require('./update');
 const { ompResumeCommand } = require('./omp');
 const { dayKey } = require('./parsers');
 const { matchAccount } = require('./accounts');
+const { characters: sharedCharacters } = require('./characters');
 
 function serveFile(res, root, rel) {
   const file = path.normalize(path.join(root, rel));
@@ -139,8 +140,10 @@ function snapshot(watcher, opts, filter = DEFAULT_FILTER(opts)) {
   const f = normFilter(typeof filter === 'string' ? { ...DEFAULT_FILTER(opts), account: filter } : filter);
   const now = Date.now();
   const raw = watcher.sessions();
+  const chars = (opts.characters || sharedCharacters()).refresh();
   const sessions = raw.map((s) => view(s, now, opts)).filter((s) => matchAccount(f.account, s.account)
     && matchFolder(f.folder, s.cwd) && (!f.agent.length || f.agent.includes(s.agent)));
+  for (const s of sessions) s.character = chars.resolve(s);
   sessions.sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
   return { now, lang: opts.demo ? null : promptLanguage(raw), account: f.account || null, folder: f.folder, agent: f.agent, sessions, summary: summary(sessions, now) };
 }
@@ -193,6 +196,15 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
       try { rel = decodeURIComponent(url.pathname.slice(m.length)); }
       catch { res.writeHead(400).end(); return; }
       serveFile(res, MOUNTS[m], rel);
+    } else if (url.pathname.startsWith('/characters/')) {
+      // Your own models from ~/.whatsmyagentdoing/models (see characters.js): plain .glb names only.
+      let name;
+      try { name = decodeURIComponent(url.pathname.slice('/characters/'.length)); }
+      catch { res.writeHead(400).end(); return; }
+      const file = (opts.characters || sharedCharacters()).modelFile(name);
+      if (!file) { res.writeHead(404).end(); return; }
+      res.writeHead(200, { 'content-type': 'model/gltf-binary', 'cache-control': 'no-cache' });
+      fs.createReadStream(file).pipe(res);
     } else if (url.pathname.startsWith('/scenes/')) {
       let rel;
       try { rel = decodeURIComponent(url.pathname.slice('/scenes/'.length)); }

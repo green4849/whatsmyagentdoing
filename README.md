@@ -228,6 +228,40 @@ the screen's 2x. Turn it off for the smoothest animation.
 The video pop-out (Safari, Firefox) sends only the room, in the room's shape,
 so its window has no wide dark margins.
 
+### Your own 3D characters
+
+The 3D view can swap the stock characters for your own `.glb` models, per
+folder, account or session. Put the models in `~/.whatsmyagentdoing/models/`
+and say who wears which in `~/.whatsmyagentdoing/characters.json`:
+
+```json
+{
+  "folders":  { "~/Documents/work": "mascot.glb" },
+  "accounts": { "118d2a10": { "model": "cat.glb", "turn": 180, "height": 1.1 } },
+  "sessions": { "3f2a9c": "mascot.glb" }
+}
+```
+
+A folder covers its subfolders (the deepest match wins); accounts and
+sessions match by id prefix; session beats folder beats account. `turn`
+rotates a model that faces away (degrees), `height` sizes it against the stock
+characters. Changes show up within seconds, no restart. A model without
+animations is moved by code: it hops when walking, bounces while typing and
+sways while thinking. A model rigged with the stock clip names (`idle`,
+`walk`, `sit`, `emote-yes`, `holding-right`, `holding-both`, `interact-right`,
+`interact-left`) plays those instead.
+
+From a picture, an image-to-3D tool (Meshy, Tripo, Rodin…) gives you a `.glb`.
+Their files are often large or Draco-compressed, which this page can't open;
+shrink them first:
+
+```bash
+npx @gltf-transform/cli optimize in.glb ~/.whatsmyagentdoing/models/mascot.glb --compress meshopt --texture-size 1024
+```
+
+Models stay outside the repository, so characters you don't own the rights to
+never end up in it.
+
 ### Magpie (optional)
 
 To include sessions observed by a local Magpie gateway, set `WMAD_MAGPIE_URL`

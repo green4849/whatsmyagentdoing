@@ -139,6 +139,7 @@ export class Office3D extends window.Office {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
     const get = (url) => new Promise((ok, fail) => loader.load(url, ok, undefined, fail));
+    this.getGLB = get;
     const [chars, furn] = await Promise.all([
       Promise.all(CHARACTERS.map((c) => get(`/assets/kenney/characters/character-${c}.glb`))),
       Promise.all(FURNITURE.map((f) => get(`/assets/kenney/furniture/${f}.glb`).then((g) => [f, g.scene]))),
@@ -993,9 +994,66 @@ export class Office3D extends window.Office {
 
   // ------------------------------------------------------------ actors
 
+  // A custom model from ~/.whatsmyagentdoing (server's characters.js), loaded
+  // once per URL. Until it arrives, or if it fails, the stock character stands in.
+  customModel(c) {
+    if (!c || !c.url || !this.getGLB) return null;
+    this.custom = this.custom || new Map();
+    let m = this.custom.get(c.url);
+    if (!m) {
+      m = { gltf: null, failed: false };
+      this.custom.set(c.url, m);
+      this.getGLB(c.url).then((g) => { m.gltf = g; }, (e) => {
+        m.failed = true;
+        console.warn(`custom character ${c.url} failed to load (Draco-compressed? see README):`, e);
+      });
+    }
+    return m.gltf;
+  }
+
+  customActor(p, gltf, c) {
+    const model = cloneSkinned(gltf.scene);
+    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    model.rotation.y = (c.turn || 0) * Math.PI / 180;
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const height = CHAR_HEIGHT * (c.height || 1) * (p.s && p.s.subagent ? 0.8 : 1);
+    const s = height / Math.max(1e-6, box.max.y - box.min.y);
+    model.scale.multiplyScalar(s);
+    // feet on the floor, centred on the spot
+    const mid = box.getCenter(new THREE.Vector3());
+    model.position.set(-mid.x * s, -box.min.y * s, -mid.z * s);
+    const body = new THREE.Group(); // squash, hop and tilt happen here
+    body.add(model);
+    const obj = new THREE.Group();
+    obj.add(body);
+    const width = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * s;
+    // A model rigged with the stock clip names (idle, walk, sit…) plays them; otherwise it's moved by code.
+    const mixer = new THREE.AnimationMixer(model);
+    const actions = {};
+    for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+    return { obj, body, mixer, actions, height, width, procedural: !actions.idle };
+  }
+
   actorFor(p) {
     let a = this.actors.get(p.key);
+    const c = p.s && p.s.character;
+    const want = c && c.url ? `${c.url}|${c.turn || 0}|${c.height || 1}` : null; // any change rebuilds
+    const gltfC = this.customModel(c);
+    // swap once a custom model is ready, or back when the mapping goes away
+    if (a && a.char !== (gltfC ? want : null)) { this.scene.remove(a.obj, a.prop); this.actors.delete(p.key); a = null; }
     if (a) return a;
+    if (gltfC) {
+      const ca = this.customActor(p, gltfC, c);
+      const prop = new THREE.Group();
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.1, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+      const book = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.04), new THREE.MeshStandardMaterial({ color: 0xc96442 }));
+      prop.add(cup, book);
+      this.scene.add(ca.obj, prop);
+      a = { ...ca, char: want, current: null, head: null, headRest: 0, armR: null, prop, cup, book, yaw: 0, last: { x: p.x, y: p.y } };
+      this.actors.set(p.key, a);
+      return a;
+    }
     const gltf = this.chars[p.h % this.chars.length];
     const obj = cloneSkinned(gltf.scene);
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -1012,7 +1070,7 @@ export class Office3D extends window.Office {
     const book = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.04), new THREE.MeshStandardMaterial({ color: 0xc96442 }));
     prop.add(cup, book);
     this.scene.add(obj, prop);
-    a = { obj, mixer, actions, current: null, head, headRest: head ? head.rotation.x : 0, armR, prop, cup, book, yaw: 0, last: { x: p.x, y: p.y } };
+    a = { obj, mixer, actions, char: null, current: null, head, headRest: head ? head.rotation.x : 0, armR, prop, cup, book, yaw: 0, last: { x: p.x, y: p.y } };
     this.actors.set(p.key, a);
     return a;
   }
@@ -1059,8 +1117,7 @@ export class Office3D extends window.Office {
       let chosen = anim;
       if (st.act === 'station') chosen = p.s.status === 'thinking' ? 'idle' : (p.desk.anim || 'interact-right');
       else if (st.pose !== 'walk' && p.poi && p.poi.anim) chosen = p.poi.anim;
-      this.play(a, chosen);
-      a.mixer.update(dt);
+      if (!a.procedural) { this.play(a, chosen); a.mixer.update(dt); }
 
       // position + facing
       const dx = p.x - a.last.x, dy = p.y - a.last.y;
@@ -1077,7 +1134,7 @@ export class Office3D extends window.Office {
         : this.plan.terrain ? this.groundHeight(p.x, p.y) : 0;
       // The sit pose's torso leans back past its origin; slide the body
       // forward so the back rests against the backrest instead of in it.
-      const fwd = st.pose === 'sit' ? SIT_FORWARD : 0;
+      const fwd = st.pose === 'sit' ? (a.procedural ? SIT_FORWARD * 0.5 : SIT_FORWARD) : 0;
       let lift = 0;
       if (st.pose !== 'walk' && p.poi && p.poi.float) {
         // zero gravity: drift up and down, slowly turning
@@ -1086,6 +1143,7 @@ export class Office3D extends window.Office {
         a.yaw += dt * 0.35;
       }
       a.obj.position.set(p.x + Math.sin(a.yaw) * fwd, seatY + lift, p.y + Math.cos(a.yaw) * fwd);
+      if (a.procedural) this.moveBody(a, p, st);
       if (a.head) {
         if (st.act === 'nap') { a.head.rotation.x = a.headRest + 0.55; a.napped = true; }
         else if (a.napped) { a.head.rotation.x = a.headRest; a.napped = false; }
@@ -1093,7 +1151,14 @@ export class Office3D extends window.Office {
       // hand-held props
       a.cup.visible = st.act === 'coffee' || st.act === 'water' || (st.pose !== 'walk' && p.poi && p.poi.prop === 'cup');
       a.book.visible = st.act === 'read';
-      if (a.armR && (a.cup.visible || a.book.visible)) {
+      if (a.procedural && (a.cup.visible || a.book.visible)) {
+        a.obj.updateMatrixWorld(true);
+        const hand = new THREE.Vector3(a.width * 0.45, a.height * 0.38, a.width * 0.3);
+        a.obj.localToWorld(hand);
+        a.prop.position.copy(hand);
+        a.prop.rotation.y = a.yaw;
+        a.cup.material.color.set(st.act === 'water' ? 0x9fd3ff : 0xffffff);
+      } else if (a.armR && (a.cup.visible || a.book.visible)) {
         a.obj.updateMatrixWorld(true);
         const hand = new THREE.Vector3(0, -0.4, 0.15);
         a.armR.localToWorld(hand);
@@ -1102,6 +1167,41 @@ export class Office3D extends window.Office {
         a.cup.material.color.set(st.act === 'water' ? 0x9fd3ff : 0xffffff);
       }
     }
+  }
+
+  // Motion for a model without the stock clips: hop when walking, bounce while
+  // typing, sway while thinking, jump for attention, nod off on a nap.
+  moveBody(a, p, st) {
+    const t = this.t / 1000 + p.phase;
+    const b = a.body;
+    let y = 0, rx = 0, rz = 0, sy = 1 + Math.sin(t * 2.2) * 0.015; // breathing
+    if (st.pose === 'walk') {
+      const k = Math.abs(Math.sin(t * 9));
+      y = k * a.height * 0.12;
+      rz = Math.sin(t * 9) * 0.09;
+      sy = 0.92 + k * 0.12;
+    } else if (st.act === 'wave') {
+      const k = Math.max(0, Math.sin(t * 6));
+      y = k * a.height * 0.15;
+      rz = Math.sin(t * 12) * 0.12;
+      sy = 0.94 + k * 0.1;
+    } else if (st.act === 'type' || st.act === 'station') {
+      sy = 1 + Math.sin(t * 16) * 0.03;
+      rz = Math.sin(t * 4) * 0.03;
+      rx = 0.08;
+    } else if (st.act === 'think') {
+      rz = Math.sin(t * 1.4) * 0.08;
+      rx = 0.04;
+    } else if (st.act === 'nap') {
+      rx = 0.3;
+      sy = 0.97 + Math.sin(t * 1.2) * 0.02;
+    } else if (st.act) {
+      rz = Math.sin(t * 3) * 0.05; // busy at something
+    }
+    if (st.pose === 'sit') sy *= 0.94;
+    b.position.y = y;
+    b.rotation.set(rx, 0, rz);
+    b.scale.set(1 + (1 - sy) * 0.5, sy, 1 + (1 - sy) * 0.5);
   }
 
   // Highest surface below `limit` under (x, z). Sampled at the point and
@@ -1223,7 +1323,8 @@ export class Office3D extends window.Office {
       const scale = p.s.subagent ? 0.8 : 1;
       const base = this.plan.terrain && st.pose !== 'sit' ? this.groundHeight(p.x, p.y) : 0;
       const floatUp = st.pose !== 'walk' && p.poi && p.poi.float ? 0.45 + Math.sin((this.t / 1000 + p.phase) * 0.9) * 0.18 : 0;
-      const top = (st.pose === 'sit' ? this.seatHeight(p.x, p.y, st.sitZ) + CHAR_HEIGHT * 0.8 * scale : base + CHAR_HEIGHT * scale) + floatUp;
+      const h = a.procedural ? a.height : CHAR_HEIGHT * scale;
+      const top = (st.pose === 'sit' ? this.seatHeight(p.x, p.y, st.sitZ) + h * (a.procedural ? 0.94 : 0.8) : base + h) + floatUp;
       v.set(p.x, top + 0.05, p.y).project(this.camera);
       const sx = (v.x + 1) / 2 * this.cw, sy = (1 - v.y) / 2 * this.ch;
       const foot = new THREE.Vector3(p.x, 0, p.y).project(this.camera);

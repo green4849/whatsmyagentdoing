@@ -5,9 +5,11 @@
   'use strict';
 
   class OfficePopout {
-    constructor({ preferences, office, text, changed }) {
+    constructor({ preferences, office, strip, text, changed }) {
       this.preferences = preferences;
       this.office = office;
+      // () => { rows, counts, quiet }: the numbered list drawn under the room in the video.
+      this.strip = strip || (() => null);
       this.text = text;
       this.changed = changed;
       this.win = null;
@@ -147,24 +149,91 @@
     drawPreview(office) {
       if (!this.stream || !office.canvas.width || !office.canvas.height) return;
       // Send only the room: in 2D its own box, in 3D the area left of the side
-      // panel. The video takes the room's shape, so the pop-out has no wide
-      // empty margins (a video can't be transparent).
+      // panel. The video takes the room's shape (a video can't be transparent),
+      // with a short numbered list of who needs you and who works under it.
       const room = !office.gl && office.roomRect?.();
       const r = room || { x: 0, y: 0, w: Math.max(40, office.cw - (office.inset?.() || 0)), h: office.ch };
-      let w = 960, h = Math.round(960 * r.h / r.w);
-      if (h > 720) { h = 720; w = Math.round(720 * r.w / r.h); }
+      const info = this.strip();
+      const MAX_ROWS = 5, ROW = 34, PAD = 12;
+      const rows = info ? info.rows.slice(0, MAX_ROWS) : [];
+      const stripH = info ? PAD * 2 + ROW * (1 + Math.max(1, rows.length) + (info.rows.length > MAX_ROWS ? 1 : 0)) : 0;
+      const w = 960;
+      let roomW = w, roomH = Math.round(w * r.h / r.w);
+      if (roomH + stripH > 720) { roomH = Math.max(160, 720 - stripH); roomW = Math.round(roomH * r.w / r.h); }
+      const h = roomH + stripH;
       const cv = this.captureCanvas;
       if (Math.abs(cv.width - w) > 8 || Math.abs(cv.height - h) > 8) { cv.width = w; cv.height = h; }
       const c = this.captureContext;
-      c.fillStyle = office.pal.dark ? '#2b2926' : '#fbf8f2';
+      const dark = office.pal.dark;
+      c.fillStyle = dark ? '#2b2926' : '#fbf8f2';
       c.fillRect(0, 0, cv.width, cv.height);
+      const dx = Math.round((cv.width - roomW) / 2);
       // Each canvas has its own pixel ratio (3D may draw at 1x with power saving).
       const copy = (src) => {
         const k = src.width / office.cw;
-        c.drawImage(src, r.x * k, r.y * k, r.w * k, r.h * k, 0, 0, cv.width, cv.height);
+        c.drawImage(src, r.x * k, r.y * k, r.w * k, r.h * k, dx, 0, roomW, roomH);
       };
       if (office.gl) copy(office.gl.domElement);
       copy(office.canvas);
+      if (info) this.drawStrip(c, info, rows, roomH, cv.width, stripH, { ROW, PAD, MAX_ROWS, dark });
+    }
+
+    drawStrip(c, info, rows, top, width, height, { ROW, PAD, MAX_ROWS, dark }) {
+      const ink = dark ? '#ecebe6' : '#1c1c1a', muted = dark ? '#a3a19a' : '#6b6a64';
+      c.fillStyle = dark ? '#1f1d1b' : '#ffffff';
+      c.fillRect(0, top, width, height);
+      c.fillStyle = dark ? '#3a3733' : '#e6e1d6';
+      c.fillRect(0, top, width, 1);
+      c.textBaseline = 'middle';
+      const font = (wt, px) => `${wt} ${px}px ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif`;
+      // Fit text into a width, cutting with an ellipsis.
+      const fit = (t, max) => {
+        t = String(t || '');
+        if (c.measureText(t).width <= max) return t;
+        while (t.length > 1 && c.measureText(t + '…').width > max) t = t.slice(0, -1);
+        return t + '…';
+      };
+      let y = top + PAD + ROW / 2;
+      // Counts: ● Needs you 0   ● Working 2   ● Finished 7
+      let x = PAD + 4;
+      c.font = font(600, 17);
+      for (const [label, n, color] of info.counts) {
+        c.fillStyle = color; c.beginPath(); c.arc(x + 5, y, 5, 0, Math.PI * 2); c.fill();
+        c.fillStyle = muted; c.fillText(label, x + 16, y);
+        const lw = c.measureText(label).width;
+        c.fillStyle = ink; c.font = font(700, 17); c.fillText(String(n), x + 22 + lw, y);
+        x += 22 + lw + c.measureText(String(n)).width + 26;
+        c.font = font(600, 17);
+      }
+      y += ROW;
+      if (!rows.length) {
+        c.font = font(500, 17); c.fillStyle = muted;
+        c.fillText(fit(info.quiet, width - PAD * 2), PAD + 4, y);
+        return;
+      }
+      for (const row of rows) {
+        let x = PAD + 4;
+        c.font = font(700, 20); c.fillStyle = row.color;
+        c.fillText(row.badge || '•', x, y);
+        x += 30;
+        c.font = font(700, 18); c.fillStyle = ink;
+        const name = fit(row.name, width * 0.36);
+        c.fillText(name, x, y);
+        x += c.measureText(name).width + 12;
+        c.font = font(600, 16); c.fillStyle = row.color;
+        c.fillText(row.status, x, y);
+        x += c.measureText(row.status).width + 12;
+        const rest = [row.act, row.name !== row.folder ? row.folder : ''].filter(Boolean).join(' · ');
+        if (rest && x < width - PAD - 40) {
+          c.font = font(500, 16); c.fillStyle = muted;
+          c.fillText(fit(rest, width - PAD - x), x, y);
+        }
+        y += ROW;
+      }
+      if (info.rows.length > MAX_ROWS) {
+        c.font = font(500, 16); c.fillStyle = muted;
+        c.fillText(`+${info.rows.length - MAX_ROWS}`, PAD + 4, y);
+      }
     }
 
     stopPreview() {

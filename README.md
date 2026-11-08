@@ -226,7 +226,17 @@ brings full speed back for a moment. The 3D view also draws at 1x instead of
 the screen's 2x. Turn it off for the smoothest animation.
 
 The video pop-out (Safari, Firefox) sends only the room, in the room's shape,
-so its window has no wide dark margins.
+so its window has no wide dark margins, with a short list under it: counts,
+then who needs you and who is working.
+
+### Numbers and session names on tags
+
+Each session that needs you or is working gets a number (①②③…) on its name
+tag, its side-panel row and the pop-out list, so a short tag matches a full
+line. A number stays with its session while it is active. With Settings →
+Session names on tags (on by default) tags show the session's name (yours or
+its title) instead of the folder; give long sessions a short name with the
+pencil in the detail panel.
 
 ### Your own 3D characters
 

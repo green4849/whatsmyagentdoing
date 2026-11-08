@@ -122,6 +122,7 @@
     .agent-logo.mono { filter: invert(1); }
   }
   .acct { flex: none; padding: 1px 6px; margin-left: 4px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .srow .badge { flex: none; margin-right: 4px; color: var(--s); font-weight: 700; }
   .acct[style] { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 18%, transparent); }
   .project { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .time { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
@@ -457,6 +458,7 @@
             <label class="tog" id="agentBadgeToggle"><span data-t="showAgent"></span><input type="checkbox" role="switch" id="showAgent"></label>
             <label class="tog" id="soundToggle"><span data-t="sound"></span><input type="checkbox" role="switch" id="sound"></label>
             <label class="tog" id="saverToggle"><span data-t="saver"></span><input type="checkbox" role="switch" id="saver"></label>
+            <label class="tog" id="tagSessionToggle"><span data-t="tagSession"></span><input type="checkbox" role="switch" id="tagSession"></label>
             <label class="tog" id="notifyToggle"><span data-t="notify"></span><input type="checkbox" role="switch" id="notify"></label>
           </div>
           <p class="tog-note" id="notifyNote" data-t="notifyBlocked" hidden></p>
@@ -536,7 +538,7 @@ const store = (() => {
   return { get, set };
 })();
 
-const PREF_DEFAULTS = { view: 'office', quality: 'mid', scene: 'office', agents: [], showSub: false, showIdle: false, showAgent: true, sound: false, notify: true, side: true, lang: 'auto', sideGroup: 'status', saver: true };
+const PREF_DEFAULTS = { view: 'office', quality: 'mid', scene: 'office', agents: [], showSub: false, showIdle: false, showAgent: true, sound: false, notify: true, side: true, lang: 'auto', sideGroup: 'status', saver: true, tagSession: true };
 function validAgentId(v) {
   return typeof v === 'string' && v !== 'all' && /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(v) && !Object.hasOwn(Object.prototype, v);
 }
@@ -830,6 +832,44 @@ function openFolderOffice(key) {
   window.open(url.href, `wmad-${key}`.replace(/[^\w-]/g, '_').slice(0, 100), 'popup,width=560,height=440');
 }
 
+// ---- Numbers: every session that needs you or is working gets a small number
+// (①②③…) on its name tag, its side-panel row and the pop-out's list, so a
+// short tag can be matched to the full line. A number stays with its session
+// while it is active and is then freed for the next one.
+const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+const badges = new Map(); // session key -> number
+const needsYou = (s) => s.status === 'waiting' || s.status === 'error';
+const isActiveRow = (s) => !s.subagent && (needsYou(s) || ACTIVE.has(s.status));
+function updateBadges(list) {
+  const active = list.filter(isActiveRow);
+  const keys = new Set(active.map((s) => s.key));
+  for (const k of badges.keys()) if (!keys.has(k)) badges.delete(k);
+  const used = new Set(badges.values());
+  for (const s of active.sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0))) {
+    if (badges.has(s.key)) continue;
+    let n = 1;
+    while (used.has(n)) n++;
+    if (n > CIRCLED.length) break;
+    badges.set(s.key, n); used.add(n);
+  }
+}
+const badgeChar = (s) => (badges.has(s.key) ? CIRCLED[badges.get(s.key) - 1] : '');
+// What a name tag says: the session's own name (yours or its title) when
+// "Session names on tags" is on, else the folder.
+const tagName = (s) => (state.tagSession ? customName(s) || s.title || projectName(s) : customName(s) || projectName(s));
+// Canvas can't read CSS variables; resolve var(--x) to its current colour.
+const cssColor = (v) => { const m = /^var\((--[\w-]+)\)$/.exec(v); return m ? getComputedStyle(document.body).getPropertyValue(m[1]).trim() || '#888' : v; };
+// The pop-out's list: who needs you, then who is working, numbered like the tags.
+function popoutStrip() {
+  const list = visible();
+  const rows = list.filter(isActiveRow).sort((a, b) => Number(needsYou(b)) - Number(needsYou(a)) || (badges.get(a.key) || 99) - (badges.get(b.key) || 99))
+    .map((s) => ({ badge: badgeChar(s), name: titleName(s) || projectName(s), folder: projectName(s),
+      status: L[s.status] || s.status, color: cssColor(statusColor(s.status)), act: s.stuck ? L.stuck(s.stuck) : s.activity || '' }));
+  const count = (f) => list.filter((s) => !s.subagent && f(s)).length;
+  return { rows, counts: [[L.needsYou, count(needsYou), cssColor(statusColor('waiting'))], [L.working, count((s) => ACTIVE.has(s.status)), cssColor(statusColor('tool'))],
+    [L.finished, count((s) => s.status === 'done' || s.status === 'interrupted'), cssColor(statusColor('done'))]], quiet: T('pipQuiet') };
+}
+
 function card(s, now) {
   const project = s.project || s.cwd ? projectName(s) : '—';
   const title = s.title && s.title !== project ? `<div class="title" title="${esc(s.title)}">${esc(s.title)}</div>` : '';
@@ -866,6 +906,7 @@ function visible() {
 function render() {
   const now = Date.now() - state.skew;
   const list = visible();
+  updateBadges(list);
   const all = state.data.sessions.filter((s) => matchAgent(s) && (state.showSub || !s.subagent));
 
   const count = (f) => all.filter((s) => f(s.status)).length;
@@ -1033,6 +1074,8 @@ const showIdle = document.getElementById('showIdle');
 const showAgent = document.getElementById('showAgent');
 showSub.addEventListener('change', () => { state.showSub = showSub.checked; store.set('showSub', state.showSub); renderNow(); });
 showIdle.addEventListener('change', () => { state.showIdle = showIdle.checked; store.set('showIdle', state.showIdle); renderNow(); });
+const tagSessionBox = document.getElementById('tagSession');
+tagSessionBox.addEventListener('change', () => { state.tagSession = tagSessionBox.checked; store.set('tagSession', state.tagSession); render(); });
 const saverBox = document.getElementById('saver');
 saverBox.addEventListener('change', () => {
   state.saver = saverBox.checked; store.set('saver', state.saver);
@@ -1057,6 +1100,7 @@ function syncControls() {
   showIdle.checked = state.showIdle;
   soundBox.checked = state.sound;
   saverBox.checked = state.saver;
+  tagSessionBox.checked = state.tagSession;
   showAgent.checked = state.showAgent;
   document.getElementById('agentBadgeToggle').style.display = view === 'office' ? '' : 'none';
   popout?.sync(PIP, view);
@@ -1110,8 +1154,11 @@ const officeOpts = {
   label: (s) => {
     // In a one-folder office every tag would repeat the folder, so name the session instead.
     const oneFolder = FOLDER && !FOLDER.includes(',');
-    const name = customName(s) || (s.agent === 'omp' && s.subagent && s.title) || (oneFolder ? s.title || AGENT_NAME[s.agent] || s.agent : projectName(s));
-    return accountName(s) ? `${name} · ${accountName(s)}` : name;
+    const name = customName(s) || (s.agent === 'omp' && s.subagent && s.title) || (oneFolder ? s.title || AGENT_NAME[s.agent] || s.agent : tagName(s));
+    const badge = badgeChar(s);
+    // Session-name tags drop the account (its colour and the list still show it) to stay short.
+    const label = accountName(s) && !state.tagSession ? `${name} · ${accountName(s)}` : name;
+    return badge ? `${badge} ${label}` : label;
   },
   onHover(s, at, click) {
     // In full screen a click opens the agent in the side panel instead of pinning a card.
@@ -1295,6 +1342,7 @@ document.getElementById('langList').addEventListener('click', (e) => {
 popout = new OfficePopout({
   preferences: () => ({ ...Object.fromEntries(Object.keys(PREF_DEFAULTS).map((k) => [k, state[k]])), lang: store.get('lang', 'auto') }),
   office: () => office,
+  strip: popoutStrip,
   text: (key) => L[key],
   changed: () => { syncControls(); render(); },
 });
@@ -1408,7 +1456,7 @@ function renderSide() {
     const folder = !inFolder && name !== projectName(s) ? `<small> · ${esc(projectName(s))}</small>` : '';
     const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || (inFolder || s.title === name ? '' : s.title) || '';
     return `<button class="srow${s.subagent ? ' sub' : ''}${inFolder ? ' infolder' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i, 14)}">
-        ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(name)}${folder}</span>${chip ? accountChip(s) : ''}</span>
+        ${agentLogo(s.agent) || '<span></span>'}<span class="nm">${badgeChar(s) ? `<b class="badge" style="--s:${statusColor(s.status)}">${badgeChar(s)}</b>` : ''}<span class="nmt">${esc(name)}${folder}</span>${chip ? accountChip(s) : ''}</span>
         <span class="tm" data-time="${esc(s.key)}"></span>
         <span class="st"><i></i><b>${esc(L[s.status] || s.status)}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
   };

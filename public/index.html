@@ -592,7 +592,7 @@ if (PIP) document.body.classList.add('pip');
     if (ACCOUNT) keep.set('account', ACCOUNT);
     if (FOLDER) keep.set('folder', FOLDER);
     if (AGENT) keep.set('agent', AGENT);
-    if (q.get('hour')) keep.set('hour', q.get('hour')); // previews a time of day in 3D
+    for (const k of ['hour', 'day']) if (q.get(k)) keep.set(k, q.get(k)); // previews a time of day / another day in 3D
     history.replaceState(null, '', location.pathname + (keep.size ? `?${keep}` : ''));
   }
 }

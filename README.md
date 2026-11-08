@@ -260,7 +260,10 @@ stations a `"zone"` (`run`, `write`, `research`, `delegate`, `think`,
 
 In 3D the sky and light follow the clock: dawn (5–7), day, dusk (17–19) and
 night. Scene lamps and glows with `"night": true` light up from dusk to dawn.
-Add `?hour=18` to the address to preview a time of day.
+Scene props can also show only at some times of day (`"when": ["dawn", "day"]`)
+or as one of a `"daily"` group, one member per calendar day; the forest
+village's dessert shop uses both for its 오늘의 신메뉴 and a 품절 sign at night.
+Add `?hour=18` to the address to preview a time of day, `?day=1` for tomorrow.
 
 ### Your own 3D characters
 

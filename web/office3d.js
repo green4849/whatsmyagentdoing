@@ -51,13 +51,21 @@ function scenePlan(def) {
   };
 }
 
-// ?hour=18 previews a time of day instead of the clock.
-const FORCED_HOUR = (() => {
+// ?hour=18 previews a time of day instead of the clock; ?day=1 previews tomorrow (daily props).
+const urlNumber = (k) => {
   try {
-    const v = new URLSearchParams(location.search).get('hour');
-    return v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) % 24 : null;
+    const v = new URLSearchParams(location.search).get(k);
+    return v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
   } catch { return null; }
-})();
+};
+const FORCED_HOUR = urlNumber('hour') == null ? null : urlNumber('hour') % 24;
+const DAY_OFFSET = urlNumber('day') || 0;
+
+// Local calendar day number, so `daily` scene props change at midnight.
+function dayNumber() {
+  const d = new Date();
+  return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000) + DAY_OFFSET;
+}
 
 function skyNow() {
   const h = FORCED_HOUR ?? new Date().getHours() + new Date().getMinutes() / 60;
@@ -580,6 +588,8 @@ export class Office3D extends window.Office {
     this.pendants = [];
     this.pulsers = [];
     this.nightLights = [];
+    this.timed = [];
+    this.dailyCount = {};
     this.windowMat = null;
     this.clearMat = null;
     this.stars = null;
@@ -607,7 +617,8 @@ export class Office3D extends window.Office {
         this.room.add(sh);
       }
     }
-    for (const p of def.props) this.buildSceneProp(p);
+    for (const p of def.props) this.buildTimedProp(p);
+    this.timedKey = null;
     this.fitCamera3D(true);
   }
 
@@ -616,6 +627,28 @@ export class Office3D extends window.Office {
   surfaceAt(x, z) {
     this.room.updateMatrixWorld(true); // boxes added so far have no world matrix until a render
     return this.surfaceBelow(x, z, 0.6, 2);
+  }
+
+  // A scene prop can show only at some times of day (`when`: dawn, day, dusk,
+  // night) and/or as one of a `daily` group, one member per calendar day.
+  buildTimedProp(p) {
+    const before = this.room.children.length;
+    this.buildSceneProp(p);
+    if (!p.when && !p.daily) return;
+    const objs = this.room.children.slice(before);
+    const group = p.daily ? (this.dailyCount[p.daily] = (this.dailyCount[p.daily] || 0) + 1) - 1 : 0;
+    this.timed.push({ objs, when: p.when, daily: p.daily, index: group });
+  }
+
+  updateTimed(sky) {
+    const day = dayNumber();
+    const key = `${sky.phase}|${day}`;
+    if (key === this.timedKey) return;
+    this.timedKey = key;
+    for (const t of this.timed) {
+      const show = (!t.when || t.when.includes(sky.phase)) && (!t.daily || ((day % this.dailyCount[t.daily]) + this.dailyCount[t.daily]) % this.dailyCount[t.daily] === t.index);
+      for (const o of t.objs) o.visible = show;
+    }
   }
 
   buildSceneProp(p) {
@@ -953,6 +986,7 @@ export class Office3D extends window.Office {
     if (this.windowMat) { const c = tinted(def.sky || '#a9d4f2', sky, '#1d2747'); this.windowMat.color.copy(c); this.windowMat.emissive.copy(c); }
     for (const l of this.pendants || []) l.intensity = sky.night ? 1.6 : 0.7;
     if (this.scene.fog) this.scene.fog.color.copy(tinted(def.fog[0], sky, '#1b2a4a', 0.6));
+    if (this.timed.length) this.updateTimed(sky);
     // lamps and glows marked `night` light up from dusk to dawn
     const lit = sky.night ? 1 : sky.phase === 'day' ? 0 : 0.6;
     for (const n of this.nightLights || []) {

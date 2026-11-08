@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")"
 OUT="${WMAD_MENUBAR_DEST:-$HOME/Applications}/WMADMenuBar.app"
 mkdir -p build
-swiftc -O -swift-version 5 -target arm64-apple-macos14.0 -framework AppKit WMADMenuBar.swift -o build/WMADMenuBar
+swiftc -O -swift-version 5 -target arm64-apple-macos14.0 -framework AppKit -framework CoreAudio WMADMenuBar.swift Pet.swift main.swift -o build/WMADMenuBar
 rm -rf "$OUT"
 mkdir -p "$OUT/Contents/MacOS"
 cp Info.plist "$OUT/Contents/Info.plist"

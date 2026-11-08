@@ -33,6 +33,42 @@ Names you gave sessions on the page live in that browser, so the menu uses the
 session's own title. Numbers follow the same rule as the page (start order,
 kept while active) but are counted separately, so they can occasionally differ.
 
+## Character on screen
+
+If `~/.whatsmyagentdoing/pet/usagi-sheet.png` and `usagi-sheet.json` exist, a
+small character walks along the bottom of the main screen (above the Dock):
+it runs to the right corner for 15 seconds when a session needs you (each
+new wait shows again; the menu bar dot keeps it after that), sits down crying for ten
+minutes after a failed request, hurries about while sessions work, dances
+while sound is playing, and dozes after five minutes without input. Click it
+to open the dashboard; drag it to move it. "화면에 캐릭터 띄우기" in the menu
+turns it off. It isn't shown over full-screen apps.
+
+When a Chrome window is open it lives on the frontmost one: once that window
+has been in front for a second, the character hops onto its top edge (or, on
+another monitor, drops in there) and walks only along the part no other window
+covers. It follows the window when it moves or changes size, and falls to the
+bottom of the screen when the window closes or reaches the top of the screen
+(no room to stand). If the front Chrome window fills its screen, the character
+waits at the bottom of that screen. Dragged off a window by hand, it stays
+where you put it until another Chrome window comes to the front. Only window
+positions and app names are read, not titles.
+
+It has a voice if you put short clips in `~/.whatsmyagentdoing/pet/sounds/`
+(outside the repo): `ask` (reached the corner for a session that needs you),
+`fail`, `done` (a turn finished), `welcome` (back after being away), `poke`
+(clicked), `drop` (let go after a drag; said every time, not held back by
+the spacing rules; picking it up is silent), `dance` (music started). `ask.m4a`, or variants `ask-1.m4a`, `ask-2.m4a` … picked at random;
+m4a, wav, mp3, aiff or caf. Missing clips are skipped. It stays rare: 8 seconds
+between any two sounds, two minutes between the same one, each turn called out
+once, nothing while you're away or a full-screen app is in front, only `ask`
+and `fail` while music plays, and its own clip doesn't count as music. It
+follows the Mac's volume; "캐릭터 소리" in the menu turns it off.
+
+The art stays outside the repo. `WMAD_PET=<name>` picks `<name>-sheet.*`.
+No permission prompts: sound means "the default output device is in use",
+away means "seconds since the last keyboard or mouse event".
+
 ## Build and run
 
 Needs only the Command Line Tools' `swiftc` (no Xcode).

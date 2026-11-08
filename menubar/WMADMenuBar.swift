@@ -343,6 +343,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let menu = NSMenu()
     let feed = Feed()
     let badges = Badges()
+    let pet = Pet()
     var snap: Snapshot?
     var up = false
     var showCounts: Bool {
@@ -359,14 +360,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let debug = ProcessInfo.processInfo.environment["WMAD_DEBUG"] != nil
         feed.onSnapshot = { [weak self] s in
             Seen.shared.baseline(s); Seen.shared.prune(s)
-            self?.snap = s; self?.up = true; self?.refreshIcon()
+            self?.snap = s; self?.up = true; self?.refreshIcon(); self?.pet.update(s)
             if debug { let c = counts(s); print("snapshot: 작업 \(c.working) 새로완료 \(c.unseen) 확인 \(c.waiting) 실패 \(c.failed)"); fflush(stdout) }
         }
         feed.onDown = { [weak self] in
-            self?.up = false; self?.refreshIcon()
+            self?.up = false; self?.refreshIcon(); self?.pet.update(nil)
             if debug { print("server down"); fflush(stdout) }
         }
         feed.start()
+        pet.start()
     }
 
     func refreshIcon() {
@@ -420,6 +422,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let counts = action("메뉴 막대에 숫자 표시", #selector(toggleCounts))
         counts.state = showCounts ? .on : .off
         m.addItem(counts)
+        let petItem = action(pet.sprite == nil ? "화면 캐릭터 (그림 없음: ~/.whatsmyagentdoing/pet)" : "화면에 캐릭터 띄우기", #selector(togglePet))
+        petItem.state = pet.shown && pet.sprite != nil ? .on : .off
+        petItem.isEnabled = pet.sprite != nil
+        m.addItem(petItem)
+        let voiceItem = action("캐릭터 소리", #selector(togglePetSound))
+        voiceItem.state = pet.voice.on ? .on : .off
+        voiceItem.isEnabled = pet.sprite != nil && pet.shown
+        m.addItem(voiceItem)
         m.addItem(.separator())
         m.addItem(action("종료", #selector(quit), key: "q"))
     }
@@ -462,33 +472,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func start() { startServer(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.feed.start() } }
     @objc func stop() { stopServer() }
     @objc func toggleCounts() { showCounts.toggle() }
+    @objc func togglePet() { pet.shown.toggle() }
+    @objc func togglePetSound() { pet.voice.on.toggle() }
     @objc func quit() { NSApp.terminate(nil) }
 }
-
-// MARK: - Entry
-
-// `--dump`: print what the menu would show, once, and exit (for checking without clicking).
-if CommandLine.arguments.contains("--dump") {
-    let sem = DispatchSemaphore(value: 0)
-    URLSession.shared.dataTask(with: BASE.appendingPathComponent("api/sessions")) { data, _, err in
-        defer { sem.signal() }
-        guard let data, let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else {
-            print("서버 꺼짐 또는 응답 해석 실패: \(err?.localizedDescription ?? "decode")"); return
-        }
-        let c = counts(snap)
-        print("[아이콘] 작업 \(c.working) · 새로 완료 \(c.unseen) · 확인 \(c.waiting) · 실패 \(c.failed)")
-        for g in buildGroups(snap, Badges()) {
-            print("== \(g.title)")
-            for r in g.rows { print("  ● \(r.line1)\n      \(r.line2)" + (r.ctx.map { " · 컨텍스트 \($0.left)% 남음\($0.tone == .quiet ? "" : $0.tone == .failed ? " [빨강]" : " [주황]")" } ?? "")) }
-            if g.more > 0 { print("  … 외 \(g.more)개") }
-        }
-    }.resume()
-    sem.wait()
-    exit(0)
-}
-
-let app = NSApplication.shared
-let delegate = App()
-app.delegate = delegate
-app.setActivationPolicy(.accessory)
-app.run()

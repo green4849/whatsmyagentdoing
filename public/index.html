@@ -456,6 +456,7 @@
             <label class="tog" id="idleToggle"><span data-t="showIdle"></span><input type="checkbox" role="switch" id="showIdle"></label>
             <label class="tog" id="agentBadgeToggle"><span data-t="showAgent"></span><input type="checkbox" role="switch" id="showAgent"></label>
             <label class="tog" id="soundToggle"><span data-t="sound"></span><input type="checkbox" role="switch" id="sound"></label>
+            <label class="tog" id="saverToggle"><span data-t="saver"></span><input type="checkbox" role="switch" id="saver"></label>
             <label class="tog" id="notifyToggle"><span data-t="notify"></span><input type="checkbox" role="switch" id="notify"></label>
           </div>
           <p class="tog-note" id="notifyNote" data-t="notifyBlocked" hidden></p>
@@ -516,7 +517,7 @@ function applyLang(code) {
   L = I18N[code];
   document.documentElement.lang = L.html;
   rtf = new Intl.RelativeTimeFormat(L.html, { numeric: 'auto', style: 'short' });
-  document.querySelectorAll('[data-t]').forEach((el) => (el.textContent = L[el.dataset.t]));
+  document.querySelectorAll('[data-t]').forEach((el) => (el.textContent = L[el.dataset.t] ?? I18N.en[el.dataset.t] ?? ''));
   document.querySelectorAll('[data-a]').forEach((el) => { el.setAttribute('aria-label', L[el.dataset.a]); el.title = L[el.dataset.a]; });
   const legend = document.getElementById('legend');
   if (legend) legend.innerHTML = ['thinking', 'tool', 'typing', 'waiting', 'done', 'error']
@@ -535,7 +536,7 @@ const store = (() => {
   return { get, set };
 })();
 
-const PREF_DEFAULTS = { view: 'office', quality: 'mid', scene: 'office', agents: [], showSub: false, showIdle: false, showAgent: true, sound: false, notify: true, side: true, lang: 'auto', sideGroup: 'status' };
+const PREF_DEFAULTS = { view: 'office', quality: 'mid', scene: 'office', agents: [], showSub: false, showIdle: false, showAgent: true, sound: false, notify: true, side: true, lang: 'auto', sideGroup: 'status', saver: true };
 function validAgentId(v) {
   return typeof v === 'string' && v !== 'all' && /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(v) && !Object.hasOwn(Object.prototype, v);
 }
@@ -1032,6 +1033,11 @@ const showIdle = document.getElementById('showIdle');
 const showAgent = document.getElementById('showAgent');
 showSub.addEventListener('change', () => { state.showSub = showSub.checked; store.set('showSub', state.showSub); renderNow(); });
 showIdle.addEventListener('change', () => { state.showIdle = showIdle.checked; store.set('showIdle', state.showIdle); renderNow(); });
+const saverBox = document.getElementById('saver');
+saverBox.addEventListener('change', () => {
+  state.saver = saverBox.checked; store.set('saver', state.saver);
+  officeKind = null; makeOffice(); // rebuild so the 3D pixel ratio follows
+});
 const soundBox = document.getElementById('sound');
 soundBox.addEventListener('change', () => {
   state.sound = soundBox.checked; store.set('sound', state.sound);
@@ -1050,6 +1056,7 @@ function syncControls() {
   showSub.checked = state.showSub;
   showIdle.checked = state.showIdle;
   soundBox.checked = state.sound;
+  saverBox.checked = state.saver;
   showAgent.checked = state.showAgent;
   document.getElementById('agentBadgeToggle').style.display = view === 'office' ? '' : 'none';
   popout?.sync(PIP, view);
@@ -1099,6 +1106,7 @@ const officeOpts = {
   compact: PIP,
   onFrame: (renderer) => popout?.drawPreview(renderer),
   tagColor,
+  saver: () => state.saver,
   label: (s) => {
     // In a one-folder office every tag would repeat the folder, so name the session instead.
     const oneFolder = FOLDER && !FOLDER.includes(',');
@@ -1157,6 +1165,8 @@ async function makeOffice() {
     if (high) { state.quality = 'mid'; store.set('quality', 'mid'); officeKind = 'mid'; syncControls(); }
   }
   office = mine;
+  // Power saving also draws 3D at 1x instead of the screen's 2x, a quarter of the pixels.
+  if (mine.gl && state.saver) { mine.gl.setPixelRatio(1); mine.resize(); }
   office.offDutyLabel = L.wentHome;
   office.setInset(panelInset(), false);
   render();

@@ -211,12 +211,15 @@
   }
 
   class Office {
-    constructor(root, { onHover, label, tagColor, onFrame, showAgent = true, compact = false } = {}) {
+    constructor(root, { onHover, label, tagColor, onFrame, saver, showAgent = true, compact = false } = {}) {
       this.root = root;
       this.onHover = onHover || (() => {});
       this.label = label || ((s) => s.project || s.agent);
       // Optional #rrggbb background for a person's name tag (folder or account colour).
       this.tagColor = tagColor || (() => null);
+      // Power saving: () => true caps how often the office is redrawn (see fpsCap).
+      this.saver = saver || (() => false);
+      this.pokedAt = 0;
       this.onFrame = onFrame;
       this.showAgent = showAgent;
       this.compact = compact;
@@ -245,14 +248,35 @@
       this.canvas.addEventListener('mousemove', (e) => this.pointer(e));
       this.canvas.addEventListener('click', (e) => this.pointer(e, true));
       this.canvas.addEventListener('mouseleave', () => { this.hoverKey = null; this.onHover(null); });
+      // Pointer and wheel input (hover, 3D orbit and zoom) briefly lifts the power-saving cap.
+      for (const ev of ['pointermove', 'pointerdown', 'wheel']) root.addEventListener(ev, () => (this.pokedAt = performance.now()), { passive: true });
       this.resize();
       this.last = performance.now();
       // Resolves true once a few frames have been drawn with data in place,
       // false if the renderer gave up (3D load failure).
       this.ready = new Promise((ok) => (this.markReady = ok));
       this.framesShown = 0;
-      const loop = (t) => { if (this.dead) return; this.frame(t); this.raf = requestAnimationFrame(loop); };
+      const loop = (t) => {
+        if (this.dead) return;
+        this.raf = requestAnimationFrame(loop);
+        const fps = this.fpsCap(t);
+        if (fps && t - (this.drawnAt || 0) < 1000 / fps - 2) return;
+        this.drawnAt = t;
+        this.frame(t);
+      };
       this.raf = requestAnimationFrame(loop);
+    }
+
+    // Frames per second to draw at, or 0 for every display refresh (60-120 Hz).
+    // With power saving: 20 while anyone works or walks, 6 when the office is
+    // quiet, and full speed for a moment after you move the mouse or the panel slides.
+    fpsCap(now) {
+      if (!this.saver() || this.framesShown < 3) return 0;
+      if (now - this.pokedAt < 1500 || this.insetMoving(now)) return 0;
+      for (const p of this.people.values()) {
+        if (p.path.length || ['thinking', 'tool', 'typing', 'waiting'].includes(p.s.status)) return 20;
+      }
+      return 6;
     }
 
     destroy() {
@@ -661,6 +685,17 @@
       // While the inset eases, follow it exactly; otherwise settle gently.
       if (!this.cam || this.insetMoving()) this.cam = want;
       else for (const k of ['zoom', 'ox', 'oy']) this.cam[k] += (want[k] - this.cam[k]) * 0.1;
+    }
+
+    // The room's box on screen (CSS px, padded), for cropping the video pop-out. 2D only.
+    roomRect(pad = 12) {
+      if (!this.cam || !this.plan) return null;
+      const { W, D } = this.plan, { zoom, ox, oy } = this.cam;
+      const x0 = Math.max(0, this.iso(0, D, 0).x * zoom + ox - pad);
+      const x1 = Math.min(this.cw, this.iso(W, 0, 0).x * zoom + ox + pad);
+      const y0 = Math.max(0, (this.iso(0, 0, WALL_H).y - 20) * zoom + oy - pad);
+      const y1 = Math.min(this.ch, (this.iso(W, D, 0).y + 10) * zoom + oy + pad);
+      return x1 - x0 > 40 && y1 - y0 > 40 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
     }
 
     pointer(e, click) {
@@ -1541,10 +1576,12 @@
     // ------------------------------------------------------------ frame
 
     frame(now) {
-      const dt = Math.min(0.05, (now - this.last) / 1000);
+      // Long gaps (power saving) are walked in 50 ms steps, so people keep their pace.
+      let dt = Math.min(0.25, (now - this.last) / 1000);
       this.last = now;
       this.t = now;
       if (!this.visible) return;
+      while (dt > 0.05) { this.step(0.05); dt -= 0.05; }
       this.step(dt);
       if (this.draw() !== false) {
         if (!this.first && ++this.framesShown === 3) this.markReady(true);

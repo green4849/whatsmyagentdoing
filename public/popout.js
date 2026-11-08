@@ -146,15 +146,25 @@
 
     drawPreview(office) {
       if (!this.stream || !office.canvas.width || !office.canvas.height) return;
+      // Send only the room: in 2D its own box, in 3D the area left of the side
+      // panel. The video takes the room's shape, so the pop-out has no wide
+      // empty margins (a video can't be transparent).
+      const room = !office.gl && office.roomRect?.();
+      const r = room || { x: 0, y: 0, w: Math.max(40, office.cw - (office.inset?.() || 0)), h: office.ch };
+      let w = 960, h = Math.round(960 * r.h / r.w);
+      if (h > 720) { h = 720; w = Math.round(720 * r.w / r.h); }
+      const cv = this.captureCanvas;
+      if (Math.abs(cv.width - w) > 8 || Math.abs(cv.height - h) > 8) { cv.width = w; cv.height = h; }
       const c = this.captureContext;
-      const w = this.captureCanvas.width, h = this.captureCanvas.height;
-      c.fillStyle = office.pal.dark ? '#1e1e1c' : '#fff';
-      c.fillRect(0, 0, w, h);
-      const scale = Math.min(w / office.canvas.width, h / office.canvas.height);
-      const dw = office.canvas.width * scale, dh = office.canvas.height * scale;
-      const x = (w - dw) / 2, y = (h - dh) / 2;
-      if (office.gl) c.drawImage(office.gl.domElement, x, y, dw, dh);
-      c.drawImage(office.canvas, x, y, dw, dh);
+      c.fillStyle = office.pal.dark ? '#2b2926' : '#fbf8f2';
+      c.fillRect(0, 0, cv.width, cv.height);
+      // Each canvas has its own pixel ratio (3D may draw at 1x with power saving).
+      const copy = (src) => {
+        const k = src.width / office.cw;
+        c.drawImage(src, r.x * k, r.y * k, r.w * k, r.h * k, 0, 0, cv.width, cv.height);
+      };
+      if (office.gl) copy(office.gl.domElement);
+      copy(office.canvas);
     }
 
     stopPreview() {

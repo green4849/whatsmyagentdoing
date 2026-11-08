@@ -217,6 +217,17 @@ with it. In folder mode, the arrow button on a folder opens a small window
 with just that folder's office; open several and tile them. One server
 serves all of these windows. `--folder` and `--agent` set the defaults.
 
+### Power saving
+
+On by default (Settings → Power saving). The office is redrawn 20 times a
+second while someone works or walks and 6 times a second when it is quiet,
+instead of at the display's refresh rate (60–120 Hz); moving the mouse over it
+brings full speed back for a moment. The 3D view also draws at 1x instead of
+the screen's 2x. Turn it off for the smoothest animation.
+
+The video pop-out (Safari, Firefox) sends only the room, in the room's shape,
+so its window has no wide dark margins.
+
 ### Magpie (optional)
 
 To include sessions observed by a local Magpie gateway, set `WMAD_MAGPIE_URL`

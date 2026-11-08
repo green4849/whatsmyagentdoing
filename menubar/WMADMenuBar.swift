@@ -9,7 +9,6 @@ let PORT = Int(ProcessInfo.processInfo.environment["WMAD_PORT"] ?? "") ?? 4545
 let BASE = URL(string: "http://127.0.0.1:\(PORT)")!
 let HOME = FileManager.default.homeDirectoryForCurrentUser.path
 let REPO = ProcessInfo.processInfo.environment["WMAD_REPO"] ?? "\(HOME)/Documents/whatsmyagentdoing"
-let FINISHED_LIMIT = 8   // finished rows shown before "… N more"
 let ACTIVE: Set<String> = ["thinking", "tool", "typing"]
 
 // MARK: - Data from /api/sessions and /events
@@ -164,7 +163,8 @@ func oneLine(_ x: String?, _ max: Int = 48) -> String {
 }
 
 func buildGroups(_ snap: Snapshot, _ badges: Badges) -> [Group] {
-    // The side panel's defaults: no subagents, no idle sessions.
+    // The side panel's defaults (no subagents, no idle sessions), and finished turns you
+    // already checked are left out: only blue "newly finished" ones stay.
     let list = snap.sessions.filter { !$0.isSub && $0.status != "idle" }
     badges.update(list)
     let now = snap.now
@@ -188,15 +188,10 @@ func buildGroups(_ snap: Snapshot, _ badges: Badges) -> [Group] {
     let need = list.filter(\.needsYou).sorted(by: recent)
     let work = list.filter { $0.working && !$0.needsYou }.sorted(by: recent)
     let fresh = list.filter { Seen.shared.isUnseen($0) }.sorted(by: recent)
-    let fin = list.filter { !$0.needsYou && !$0.working && !Seen.shared.isUnseen($0) }.sorted(by: recent)
     var out: [Group] = []
     if !need.isEmpty { out.append(Group(title: "확인 필요 · \(need.count)", rows: need.map(row), more: 0)) }
     if !fresh.isEmpty { out.append(Group(title: "새로 완료 · \(fresh.count)", rows: fresh.map(row), more: 0, unseen: true)) }
     if !work.isEmpty { out.append(Group(title: "작업 중 · \(work.count)", rows: work.map(row), more: 0)) }
-    if !fin.isEmpty {
-        out.append(Group(title: "완료 · \(fin.count)", rows: fin.prefix(FINISHED_LIMIT).map(row),
-                         more: max(0, fin.count - FINISHED_LIMIT)))
-    }
     return out
 }
 

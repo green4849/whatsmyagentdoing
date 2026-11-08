@@ -11,7 +11,8 @@ opening a window.
   finished and you haven't checked it yet, green while sessions work. No dot
   when it's quiet; greyed out when the dashboard isn't running.
   "Show numbers in the menu bar" swaps the dot for a count per colour.
-- **Menu**: needs you, newly finished (blue), working, finished. Each row has
+- **Menu**: needs you, newly finished (blue), working. Finished turns you
+  already checked are left out. Each row has
   the session's number (①②③), its name and folder, then its status, the
   failure reason or the current step, and a time. Hover for the full title,
   folder, agent and account. Subagents and idle sessions are left out, as in

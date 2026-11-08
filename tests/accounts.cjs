@@ -34,12 +34,12 @@ test('desktop session metadata maps current and earlier transcript ids to the ac
   fs.mkdirSync(path.join(dir, 'not-an-account', ORG), { recursive: true });
   fs.writeFileSync(path.join(dir, 'not-an-account', ORG, 'local_x.json'), JSON.stringify({ cliSessionId: 'sess-x' }));
 
-  const idx = new AccountIndex({ dir, labels: JSON.stringify({ 'aaaa1111': 'Max', 'bbbb': 'Personal' }) });
+  const idx = new AccountIndex({ dir, labels: JSON.stringify({ 'aaaa1111': 'Max', 'bbbb': { label: 'Personal', color: '#3b82f6' } }) });
   assert.equal(idx.refresh(), true);
   assert.equal(idx.refresh(), false, 'unchanged files are not reread');
   assert.deepEqual(idx.lookup('sess-a1'), { id: 'aaaa1111', label: 'Max' });
   assert.deepEqual(idx.lookup('sess-a2'), { id: 'aaaa1111', label: 'Max' });
-  assert.deepEqual(idx.lookup('sess-b1'), { id: 'bbbb2222', label: 'Personal' });
+  assert.deepEqual(idx.lookup('sess-b1'), { id: 'bbbb2222', label: 'Personal', color: '#3b82f6' });
   assert.equal(idx.lookup('sess-x'), null, 'folders that are not account ids are ignored');
   assert.equal(idx.lookup('unknown'), null);
   assert.equal(idx.lookup(undefined), null);
@@ -63,7 +63,9 @@ test('labels come from inline JSON or a file, and bad input is reported', t => {
   const dir = tmp(t);
   const file = path.join(dir, 'accounts.json');
   fs.writeFileSync(file, JSON.stringify({ 'bbbb': 'Short', 'bbbb2222': 'Long', empty: ' ' }));
-  assert.deepEqual(readLabels(file), [['bbbb2222', 'Long'], ['bbbb', 'Short']], 'longest prefix first; blank labels dropped');
+  assert.deepEqual(readLabels(file), [['bbbb2222', { label: 'Long' }], ['bbbb', { label: 'Short' }]], 'longest prefix first; blank labels dropped');
+  assert.deepEqual(readLabels('{"aaaa":{"label":"Max","color":"#D97757"},"bbbb":{"label":"P","color":"red"},"cccc":{"color":"#fff"}}'),
+    [['aaaa', { label: 'Max', color: '#d97757' }], ['bbbb', { label: 'P' }]], 'colours must be #rgb or #rrggbb; entries need a label');
   assert.deepEqual(readLabels(undefined), []);
   assert.throws(() => readLabels('{nope'), /WMAD_ACCOUNT_LABELS/);
   assert.throws(() => readLabels(path.join(dir, 'missing.json')), /cannot read/);

@@ -176,10 +176,24 @@ Keep it out of the repository:
 WMAD_ACCOUNT_LABELS='{"aaaa1111":"Max","bbbb2222":"Personal"}' node bin/cli.js
 ```
 
+A label can also carry a name-tag colour:
+`{"aaaa1111": {"label": "Max", "color": "#d97757"}}` (`#rgb` or `#rrggbb`).
 Cards, the side panel, the detail panel and the office name tags then show the
 label. Open `http://localhost:4545/?account=Personal` (a label, an id prefix, or
 `none`) for one account's office; pop-outs keep the filter and the window title
 starts with it. `--account <name>` makes a filter the server's default.
+
+### Folders in the side panel
+
+The button next to the agent count switches the side panel between grouping
+by status and grouping by folder. In folder mode each folder folds open and
+shut, shows how many of its sessions need you or are working, and lists its
+sessions by their titles (`/rename` or the desktop app's name; with
+`--private`, agent and start time). Hover a folder to rename it (or
+double-click it) or pick its name-tag colour; an empty name or × restores the
+default. Folder names and colours apply to the office name tags too, and a
+folder colour wins over an account colour. They are kept in this browser, per
+port, keyed by the folder's full path.
 
 ### Magpie (optional)
 

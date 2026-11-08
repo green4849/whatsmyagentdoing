@@ -11,8 +11,9 @@
 // changes, sessions simply have no account.
 //
 // Labels come from WMAD_ACCOUNT_LABELS, either inline JSON or a path to a JSON
-// file, mapping an account UUID (or any prefix of it) to a display name:
-//   {"aaaa1111": "Max", "bbbb2222": "Personal"}
+// file, mapping an account UUID (or any prefix of it) to a display name, or to
+// a name and a #rrggbb colour for its name tags:
+//   {"aaaa1111": "Max", "bbbb2222": {"label": "Personal", "color": "#3b82f6"}}
 // Keep that mapping out of the repository.
 
 const fs = require('fs');
@@ -37,11 +38,14 @@ function readLabels(raw) {
   try { obj = JSON.parse(text); } catch { throw new Error('WMAD_ACCOUNT_LABELS must be a JSON object of {"<account uuid or prefix>": "<label>"}'); }
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('WMAD_ACCOUNT_LABELS must be a JSON object');
   return Object.entries(obj)
-    .filter(([k, v]) => k && typeof v === 'string' && v.trim())
-    .map(([k, v]) => [k.toLowerCase(), v.trim()])
+    .map(([k, v]) => [k, typeof v === 'string' ? { label: v } : v])
+    .filter(([k, v]) => k && v && typeof v.label === 'string' && v.label.trim())
+    .map(([k, v]) => [k.toLowerCase(), { label: v.label.trim(), ...(validColor(v.color) ? { color: v.color.toLowerCase() } : {}) }])
     // Longest prefix first, so a more specific entry wins.
     .sort((a, b) => b[0].length - a[0].length);
 }
+
+const validColor = (c) => typeof c === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(c);
 
 const UUID_DIR = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i;
 
@@ -53,10 +57,11 @@ class AccountIndex {
     this.bySession = new Map(); // transcript id -> account uuid
   }
 
+  // { label, color? } for an account uuid; unlabelled accounts show their short id.
   label(uuid) {
     const id = uuid.toLowerCase();
     const hit = this.labels.find(([prefix]) => id.startsWith(prefix));
-    return hit ? hit[1] : id.slice(0, 8);
+    return hit ? hit[1] : { label: id.slice(0, 8) };
   }
 
   // Rescans the metadata files; returns true when the mapping changed.
@@ -98,10 +103,10 @@ class AccountIndex {
     return changed;
   }
 
-  // { id, label } for a transcript id, or null when no desktop session names it.
+  // { id, label, color? } for a transcript id, or null when no desktop session names it.
   lookup(sessionId) {
     const account = sessionId && this.bySession.get(sessionId);
-    return account ? { id: account.slice(0, 8), label: this.label(account) } : null;
+    return account ? { id: account.slice(0, 8), ...this.label(account) } : null;
   }
 }
 
@@ -120,4 +125,4 @@ function matchAccount(filter, account) {
   return account.label.toLowerCase() === f || (f.length >= 4 && account.id.startsWith(f.slice(0, 8)));
 }
 
-module.exports = { AccountIndex, desktopSessionsDir, readLabels, matchAccount };
+module.exports = { AccountIndex, desktopSessionsDir, readLabels, matchAccount, validColor };

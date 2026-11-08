@@ -201,11 +201,22 @@
 
   // ---------------------------------------------------------------- office
 
+  // Black or white text, whichever reads better on a #rgb / #rrggbb background.
+  function inkOn(hex) {
+    let h = hex.slice(1);
+    if (h.length === 3) h = h.replace(/./g, '$&$&');
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#1c1c1a' : '#ffffff';
+  }
+
   class Office {
-    constructor(root, { onHover, label, onFrame, showAgent = true, compact = false } = {}) {
+    constructor(root, { onHover, label, tagColor, onFrame, showAgent = true, compact = false } = {}) {
       this.root = root;
       this.onHover = onHover || (() => {});
       this.label = label || ((s) => s.project || s.agent);
+      // Optional #rrggbb background for a person's name tag (folder or account colour).
+      this.tagColor = tagColor || (() => null);
       this.onFrame = onFrame;
       this.showAgent = showAgent;
       this.compact = compact;
@@ -1434,7 +1445,8 @@
 
       const hover = this.hoverKey === p.key;
       if (!s.subagent || hover) {
-        pill(this.label(s), pal.text, pal.tagBg, top - 11, p.mode === 'work' || hover ? 1 : 0.7, true);
+        const tint = this.tagColor(s);
+        pill(this.label(s), tint ? inkOn(tint) : pal.text, tint || pal.tagBg, top - 11, p.mode === 'work' || hover ? 1 : 0.7, true);
       } else if (badge) {
         this.agentBadge(badge, x, top - 11);
       }

@@ -122,6 +122,7 @@
     .agent-logo.mono { filter: invert(1); }
   }
   .acct { flex: none; padding: 1px 6px; margin-left: 4px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .acct[style] { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 18%, transparent); }
   .project { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .time { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
   .title { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -235,6 +236,27 @@
   .icon-btn { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
   .icon-btn:hover { color: var(--ink); }
   .side-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 8px 10px 16px; }
+  .group-btn { flex: none; height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+  .group-btn:hover { color: var(--ink); }
+  .fgroup { display: flex; align-items: center; gap: 4px; margin: 8px 2px 2px; padding: 2px 4px 2px 0; border-left: 3px solid var(--fc, transparent); border-radius: 4px; }
+  .fgroup .fold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px 4px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; text-align: left; cursor: pointer; border-radius: 8px; }
+  .fgroup .fold:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .fgroup .fold .ui-ico { flex: none; width: 14px; height: 14px; transition: transform .15s; transform: rotate(90deg); }
+  .fgroup.folded .fold .ui-ico { transform: none; }
+  .fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fname small { color: var(--muted); font-weight: 500; }
+  .fcount { flex: none; color: var(--muted); font-size: 12px; font-weight: 500; }
+  .fdot { flex: none; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
+  .fdot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--s); }
+  .fbtn { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; opacity: 0; }
+  .fgroup:hover .fbtn, .fgroup:focus-within .fbtn, .fbtn.freset { opacity: 1; }
+  .fbtn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+  .fbtn .ui-ico { width: 14px; height: 14px; }
+  .fswatch { position: relative; overflow: hidden; }
+  .fswatch::after { content: ''; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); background: var(--fc, transparent); }
+  .fswatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .frename { flex: 1; min-width: 0; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; }
+  .fbody .srow.infolder { padding-left: 22px; }
   .side-group { margin: 10px 6px 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   .srow { width: 100%; display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 9px; align-items: center; text-align: left; padding: 9px 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
   .srow:hover, .srow:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); outline: none; }
@@ -455,6 +477,7 @@
   <aside class="side" id="side" aria-label="Agents">
     <div class="side-pane" id="sideList">
       <div class="side-head"><b id="sideTitle"></b><span class="side-count" id="sideCount"></span>
+        <button class="group-btn" id="sideGroupBtn"></button>
         <button class="icon-btn" id="sideHide"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L21 12l-6.5 6.5M3 12h17"/></svg></button></div>
       <div class="side-body" id="sideRows"></div>
     </div>
@@ -511,7 +534,7 @@ const store = (() => {
   return { get, set };
 })();
 
-const PREF_DEFAULTS = { view: 'office', quality: 'mid', scene: 'office', agents: [], showSub: false, showIdle: false, showAgent: true, sound: false, notify: true, side: true, lang: 'auto' };
+const PREF_DEFAULTS = { view: 'office', quality: 'mid', scene: 'office', agents: [], showSub: false, showIdle: false, showAgent: true, sound: false, notify: true, side: true, lang: 'auto', sideGroup: 'status' };
 function validAgentId(v) {
   return typeof v === 'string' && v !== 'all' && /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(v) && !Object.hasOwn(Object.prototype, v);
 }
@@ -523,6 +546,7 @@ function validPreference(k, v) {
   // Which agents to show; none selected means all of them.
   if (k === 'agents') return Array.isArray(v) && v.length <= 32 && v.every(validAgentId);
   if (k === 'lang') return v === 'auto' || Object.hasOwn(I18N, v);
+  if (k === 'sideGroup') return ['status', 'folder'].includes(v);
   return typeof v === 'string' && /^[a-z0-9-]+$/.test(v);
 }
 // The filter used to be one agent or 'all'; carry an old single choice over once.
@@ -670,9 +694,104 @@ function renderToday() {
 
 // The Claude account a session ran under; hidden when the page already shows only one account.
 const accountName = (s) => (!ACCOUNT && s.account ? s.account.label : '');
-const accountChip = (s) => (accountName(s) ? `<span class="acct" title="${esc(s.account.id)}">${esc(accountName(s))}</span>` : '');
+const accountChip = (s) => (accountName(s) ? `<span class="acct" title="${esc(s.account.id)}"${/^#[0-9a-f]{3,6}$/i.test(s.account.color || '') ? ` style="--ac:${s.account.color}"` : ''}>${esc(accountName(s))}</span>` : '');
+// ---- Folders: the side panel can group sessions by folder, and each folder can
+// get its own name and name-tag colour. Kept in this browser (per port), keyed
+// by the folder's full path so two folders with the same name stay apart.
+const T = (k) => L[k] ?? I18N.en[k] ?? k;
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const folders = { names: {}, colors: {}, folded: new Set() };
+function loadFolders() {
+  const obj = (v, ok) => Object.fromEntries(Object.entries(v && typeof v === 'object' && !Array.isArray(v) ? v : {}).filter(([k, x]) => k.length <= 1000 && ok(x)));
+  folders.names = obj(store.get('folderNames', {}), (x) => typeof x === 'string' && x.trim() && x.length <= 60);
+  folders.colors = obj(store.get('folderColors', {}), (x) => typeof x === 'string' && HEX.test(x));
+  const folded = store.get('folderFolded', []);
+  folders.folded = new Set(Array.isArray(folded) ? folded.filter((x) => typeof x === 'string').slice(0, 500) : []);
+}
+loadFolders();
+function saveFolders() {
+  store.set('folderNames', folders.names);
+  store.set('folderColors', folders.colors);
+  store.set('folderFolded', [...folders.folded]);
+}
+const folderKey = (s) => s.cwd || `${s.agent}:`;
+// The folder's own name unless you renamed it.
+const projectName = (s) => folders.names[folderKey(s)] || s.project || AGENT_NAME[s.agent] || s.agent;
+// Name-tag colour: the folder's, else the account's (WMAD_ACCOUNT_LABELS), else the default.
+const tagColor = (s) => folders.colors[folderKey(s)] || (s.account && HEX.test(s.account.color || '') ? s.account.color : null);
+// A session's own name inside its folder: its title (/rename or the desktop app's), else agent and start time.
+const sessionName = (s) => s.title || `${AGENT_NAME[s.agent] || s.agent} · ${hhmm(s.startedAt || s.lastEventAt)}`;
+const groupRank = (s) => { const i = GROUPS.findIndex((g) => g.match(s.status)); return i < 0 ? GROUPS.length : i; };
+function folderGroups(list) {
+  const map = new Map();
+  for (const s of list) {
+    const k = folderKey(s);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(s);
+  }
+  return [...map].map(([key, items]) => {
+    items.sort((a, b) => groupRank(a) - groupRank(b) || (b.lastEventAt || 0) - (a.lastEventAt || 0));
+    return { key, items, rank: groupRank(items[0]), last: Math.max(...items.map((s) => s.lastEventAt || 0)) };
+  }).sort((a, b) => a.rank - b.rank || b.last - a.last);
+}
+const CHEVRON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5l6.5 6.5L9 18.5"/></svg>';
+const PENCIL = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+function folderHead(g, all) {
+  const s0 = g.items[0];
+  // Two folders with the same name: add the parent folder so they can be told apart.
+  const twin = all.some((o) => o !== g && projectName(o.items[0]) === projectName(s0));
+  const parent = twin && s0.cwd ? s0.cwd.split(/[\\/]/).filter(Boolean).slice(-2, -1)[0] : '';
+  const color = folders.colors[g.key] || '';
+  const folded = folders.folded.has(g.key);
+  const count = (key) => g.items.filter((s) => GROUPS.find((x) => x.key === key).match(s.status)).length;
+  const dots = [['needsYou', 'waiting'], ['working', 'tool']].map(([key, st]) => {
+    const n = count(key);
+    return n ? `<span class="fdot" style="--s:${statusColor(st)}" title="${esc(L[key])}">${n}</span>` : '';
+  }).join('');
+  const accounts = ACCOUNT ? [] : [...new Map(g.items.filter((s) => s.account).map((s) => [s.account.id, s])).values()];
+  return `<div class="fgroup${folded ? ' folded' : ''}" style="--fc:${color || 'transparent'}">
+    <button class="fold" data-fold="${esc(g.key)}" aria-expanded="${!folded}">${CHEVRON}<span class="fname" title="${esc(s0.cwd || '')}">${esc(projectName(s0))}${parent ? `<small> · ${esc(parent)}</small>` : ''}</span><span class="fcount">${g.items.length}</span>${dots}</button>
+    ${accounts.map(accountChip).join('')}
+    <button class="fbtn" data-rename="${esc(g.key)}" title="${esc(T('renameFolder'))}" aria-label="${esc(T('renameFolder'))}">${PENCIL}</button>
+    <label class="fbtn fswatch" title="${esc(T('folderColor'))}"><input type="color" data-color="${esc(g.key)}" value="${esc(color || tagColor(s0) || '#8a8a85')}" aria-label="${esc(T('folderColor'))}"></label>
+    ${color ? `<button class="fbtn freset" data-reset="${esc(g.key)}" title="${esc(T('resetColor'))}" aria-label="${esc(T('resetColor'))}">×</button>` : ''}
+  </div>`;
+}
+function startRename(key) {
+  const head = document.querySelector(`#sideRows .fold[data-fold="${CSS.escape(key)}"]`);
+  const name = head?.querySelector('.fname');
+  if (!name) return;
+  const input = document.createElement('input');
+  input.className = 'frename';
+  input.value = folders.names[key] || '';
+  input.placeholder = name.textContent;
+  input.maxLength = 60;
+  input.setAttribute('aria-label', T('renameFolder'));
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save) {
+      const v = input.value.trim();
+      if (v) folders.names[key] = v; else delete folders.names[key];
+      saveFolders();
+    }
+    input.blur(); // lets the list redraw (it holds still while an input has focus)
+    renderNow();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('click', (e) => e.stopPropagation());
+  name.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
 function card(s, now) {
-  const project = s.project || (s.cwd ? s.cwd : '—');
+  const project = s.project || s.cwd ? projectName(s) : '—';
   const title = s.title && s.title !== project ? `<div class="title" title="${esc(s.title)}">${esc(s.title)}</div>` : '';
   const act = s.activity ? `<span class="act" title="${esc(s.activity)}">${esc(s.activity)}</span>` : '';
   const showText = !s.subagent || ACTIVE.has(s.status);
@@ -790,9 +909,9 @@ function onData(data) {
     const needsYou = s.status === 'waiting' || s.status === 'error';
     let alert = null;
     if (!first && before && before !== s.status && (needsYou || (s.status === 'done' && ACTIVE.has(before)))) {
-      alert = s.status === 'done' ? L.doneNote(s.project || s.agent) : `${s.project || s.agent}: ${L[s.status]}`;
+      alert = s.status === 'done' ? L.doneNote(projectName(s)) : `${projectName(s)}: ${L[s.status]}`;
     } else if (!first && s.stuck && !wasStuck) {
-      alert = `${s.project || s.agent}: ${L.stuck(s.stuck)}`;
+      alert = `${projectName(s)}: ${L.stuck(s.stuck)}`;
     }
     if (alert) {
       state.flash.add(s.key);
@@ -936,8 +1055,9 @@ function hideTip() { tipKey = null; tipPinned = false; tip.style.display = 'none
 const officeOpts = {
   compact: PIP,
   onFrame: (renderer) => popout?.drawPreview(renderer),
+  tagColor,
   label: (s) => {
-    const name = (s.agent === 'omp' && s.subagent && s.title) || s.project || AGENT_NAME[s.agent] || s.agent;
+    const name = (s.agent === 'omp' && s.subagent && s.title) || projectName(s);
     return accountName(s) ? `${name} · ${accountName(s)}` : name;
   },
   onHover(s, at, click) {
@@ -1126,6 +1246,7 @@ popout = new OfficePopout({
 // Both windows share preferences; keep filters, language, scene and badges in
 // sync even when changes come from the compact window or another open tab.
 window.addEventListener('storage', (e) => {
+  if (e.key === null || /^wmad\.folder(Names|Colors|Folded)$/.test(e.key)) { loadFolders(); renderNow(); if (e.key !== null) return; }
   if (e.key !== null && !Object.keys(PREF_DEFAULTS).some((k) => e.key === 'wmad.' + k)) return;
   Object.assign(state, readPreferences());
   renderLangMenu();
@@ -1227,22 +1348,34 @@ function renderSide() {
   const list = visible();
   document.getElementById('sideCount').textContent = list.length;
   document.getElementById('sideTabCount').textContent = `${L.agentsTitle} · ${list.length}`;
-  const rows = GROUPS.map((g) => {
-    const items = list.filter((s) => g.match(s.status));
-    if (!items.length) return '';
-    return `<div class="side-group">${esc(L[g.key])} · ${items.length}</div>` + items.map((s, i) => {
-      const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || s.title || '';
-      return `<button class="srow${s.subagent ? ' sub' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i + (g.key === 'working' ? 3 : g.key === 'finished' ? 8 : 0), 14)}">
-        ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(s.project || AGENT_NAME[s.agent] || s.agent)}</span>${accountChip(s)}</span>
+  const row = (s, i, name, inFolder, chip = true) => {
+    const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || (inFolder ? '' : s.title) || '';
+    return `<button class="srow${s.subagent ? ' sub' : ''}${inFolder ? ' infolder' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i, 14)}">
+        ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(name)}</span>${chip ? accountChip(s) : ''}</span>
         <span class="tm" data-time="${esc(s.key)}"></span>
         <span class="st"><i></i><b>${esc(L[s.status] || s.status)}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
+  };
+  const rows = state.sideGroup === 'folder'
+    ? folderGroups(list).map((g, _, all) => folderHead(g, all)
+      // The folder head already names its account when there is only one.
+      + (folders.folded.has(g.key) ? '' : `<div class="fbody">${g.items.map((s, i, all) => row(s, i, sessionName(s), true,
+        new Set(all.filter((x) => x.account).map((x) => x.account.id)).size > 1)).join('')}</div>`)).join('')
+    : GROUPS.map((g) => {
+      const items = list.filter((s) => g.match(s.status));
+      if (!items.length) return '';
+      return `<div class="side-group">${esc(L[g.key])} · ${items.length}</div>`
+        + items.map((s, i) => row(s, i + (g.key === 'working' ? 3 : g.key === 'finished' ? 8 : 0), projectName(s), false)).join('');
     }).join('');
-  }).join('');
+  const groupBtn = document.getElementById('sideGroupBtn');
+  groupBtn.textContent = T(state.sideGroup === 'folder' ? 'byFolder' : 'byStatus');
+  groupBtn.title = T(state.sideGroup === 'folder' ? 'byStatus' : 'byFolder');
   const box = document.getElementById('sideRows');
   const html = rows || `<div class="msgs-note">${esc(L.empty)}</div>`;
   // Rows re-sort as statuses change; hold them still while the pointer is on
   // the list so a click lands on the agent you aimed at, and catch up on leave.
-  if (box.dataset.html !== html && box.matches(':hover') && box.dataset.html && !rowsNow) { box.dataset.stale = '1'; }
+  // Never redraw under a folder name or colour being edited.
+  const editing = box.contains(document.activeElement) && document.activeElement.matches('input');
+  if (box.dataset.html !== html && (editing || box.matches(':hover') && box.dataset.html && !rowsNow)) { box.dataset.stale = '1'; }
   else if (box.dataset.html !== html) {
     box.innerHTML = html; box.dataset.html = html; delete box.dataset.stale;
     box.querySelectorAll('[data-time]').forEach((el) => { const s = list.find((x) => x.key === el.dataset.time); if (s) el.textContent = timeLabel(s, now); });
@@ -1276,7 +1409,7 @@ function renderDetail(scrollDown) {
   const s = state.data.sessions.find((x) => x.key === sel);
   if (!s) { closeDetail(); return; }
   const now = Date.now() - state.skew;
-  document.getElementById('detailTitle').innerHTML = `${agentLogo(s.agent)}${esc(s.project || AGENT_NAME[s.agent] || s.agent)}`;
+  document.getElementById('detailTitle').innerHTML = `${agentLogo(s.agent)}${esc(projectName(s))}`;
   // Fetch again whenever the agent logged something new.
   if (convo.at !== s.lastEventAt && !convo.busy) loadConvo(s);
   const body = document.getElementById('detailBody');
@@ -1289,7 +1422,7 @@ function renderDetail(scrollDown) {
           : `<div class="msg ${m.role}">${esc(m.text)}<span class="at">${esc(hhmm(m.at))}</span></div>`).join('')}</div>`;
   const resume = resumeCmd(s);
   const html = `
-    ${s.title && s.title !== s.project ? `<div class="dtitle">${esc(s.title)}</div>` : ''}
+    ${s.title && s.title !== projectName(s) ? `<div class="dtitle">${esc(s.title)}</div>` : ''}
     <div class="dstatus" style="--s:${statusColor(s.status)}"><i></i><b>${esc(L[s.status] || s.status)}</b>${s.activity ? `<span class="act">${esc(s.activity)}</span>` : ''}${s.stuck ? `<span class="stuck">${esc(L.stuck(s.stuck))}</span>` : ''}</div>
     <dl class="dmeta">
       <dt>${esc(L.modelL)}</dt><dd>${esc(s.model || '—')}${s.subagent ? ` · ${esc(L.sub)}` : ''}</dd>
@@ -1331,7 +1464,37 @@ document.getElementById('sideTab').addEventListener('click', () => setSide(true)
 document.getElementById('sideBack').addEventListener('click', closeDetail);
 document.getElementById('sideRows').addEventListener('mouseleave', (e) => { if (e.currentTarget.dataset.stale) renderSide(); });
 document.getElementById('sideRows').addEventListener('click', (e) => {
+  const fold = e.target.closest('[data-fold]');
+  if (fold) {
+    const k = fold.dataset.fold;
+    if (!folders.folded.delete(k)) folders.folded.add(k);
+    saveFolders(); renderNow(); return;
+  }
+  const rename = e.target.closest('[data-rename]');
+  if (rename) { startRename(rename.dataset.rename); return; }
+  const reset = e.target.closest('[data-reset]');
+  if (reset) { delete folders.colors[reset.dataset.reset]; saveFolders(); renderNow(); return; }
   const b = e.target.closest('.srow'); if (b) openDetail(b.dataset.key);
+});
+document.getElementById('sideRows').addEventListener('dblclick', (e) => {
+  const fold = e.target.closest('[data-fold]');
+  if (fold) { e.preventDefault(); startRename(fold.dataset.fold); }
+});
+// 'input' previews the colour live; the list redraws once the picker closes.
+document.getElementById('sideRows').addEventListener('input', (e) => {
+  const k = e.target.dataset?.color;
+  if (k === undefined || !HEX.test(e.target.value)) return;
+  folders.colors[k] = e.target.value.toLowerCase();
+  e.target.closest('.fgroup')?.style.setProperty('--fc', folders.colors[k]);
+});
+document.getElementById('sideRows').addEventListener('change', (e) => {
+  if (e.target.dataset?.color === undefined) return;
+  saveFolders(); e.target.blur(); renderNow();
+});
+document.getElementById('sideGroupBtn').addEventListener('click', () => {
+  state.sideGroup = state.sideGroup === 'folder' ? 'status' : 'folder';
+  store.set('sideGroup', state.sideGroup);
+  renderNow();
 });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, select, textarea, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;

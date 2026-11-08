@@ -15,6 +15,7 @@ let ACTIVE: Set<String> = ["thinking", "tool", "typing"]
 
 struct Account: Decodable { let id: String?; let label: String?; let color: String? }
 struct Outcome: Decodable { let kind: String?; let detail: String? }
+struct Context: Decodable { let used: Double; let window: Double? }
 struct Session: Decodable {
     let key: String
     let agent: String
@@ -27,6 +28,7 @@ struct Session: Decodable {
     let status: String
     let stuck: Int?
     let activity: String?
+    let context: Context?
     let error: String?
     let reply: String?
     let turnStartedAt: Double?
@@ -134,7 +136,17 @@ final class Badges {
 
 // MARK: - Menu model (kept apart from AppKit so --dump can print it)
 
-struct Row { let s: Session; let badge: String; let line1: String; let line2: String; let tip: String }
+struct Row { let s: Session; let badge: String; let line1: String; let line2: String; let tip: String; var ctx: Ctx? = nil }
+
+// How much of the context window is left, coloured like the dashboard's bar
+// (amber from 60% used, red from 85%).
+struct Ctx { let left: Int; let tone: Tone }
+func contextLeft(_ s: Session) -> Ctx? {
+    guard let c = s.context, let w = c.window, w > 0 else { return nil }
+    let used = min(100, Int((c.used / w * 100).rounded()))
+    return Ctx(left: 100 - used, tone: used >= 85 ? .failed : used >= 60 ? .waiting : .quiet)
+}
+func tokens(_ n: Double) -> String { n >= 1_000_000 ? String(format: "%.1fM", n / 1_000_000) : "\(Int((n / 1000).rounded()))K" }
 struct Group { let title: String; let rows: [Row]; let more: Int; var unseen = false }
 
 func dur(_ ms: Double) -> String {
@@ -182,7 +194,8 @@ func buildGroups(_ snap: Snapshot, _ badges: Badges) -> [Group] {
         let line2 = [label, act, timeLabel(s, now)].filter { !$0.isEmpty }.joined(separator: " · ")
         var tip = [s.title ?? s.folder, "폴더: \(s.cwd ?? s.folder)", "에이전트: \(AGENT_NAME[s.agent] ?? s.agent)"]
         if let a = s.account?.label { tip.append("계정: \(a)") }
-        return Row(s: s, badge: b, line1: line1, line2: line2, tip: tip.joined(separator: "\n"))
+        if let c = s.context, let w = c.window { tip.append("컨텍스트: \(tokens(c.used)) / \(tokens(w))") }
+        return Row(s: s, badge: b, line1: line1, line2: line2, tip: tip.joined(separator: "\n"), ctx: contextLeft(s))
     }
     let recent: (Session, Session) -> Bool = { ($0.lastEventAt ?? 0) > ($1.lastEventAt ?? 0) }
     let need = list.filter(\.needsYou).sorted(by: recent)
@@ -418,8 +431,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let t = NSMutableAttributedString()
         t.append(NSAttributedString(string: "● ", attributes: [.foregroundColor: color(tone(r.s)), .font: NSFont.systemFont(ofSize: 10)]))
         t.append(NSAttributedString(string: r.line1, attributes: [.font: NSFont.menuFont(ofSize: 13)]))
+        let small = NSFont.menuFont(ofSize: 11)
         t.append(NSAttributedString(string: "\n    " + r.line2, attributes: [
-            .font: NSFont.menuFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
+            .font: small, .foregroundColor: NSColor.secondaryLabelColor]))
+        if let c = r.ctx {
+            t.append(NSAttributedString(string: " · ", attributes: [.font: small, .foregroundColor: NSColor.secondaryLabelColor]))
+            t.append(NSAttributedString(string: "컨텍스트 \(c.left)% 남음", attributes: [
+                .font: small, .foregroundColor: c.tone == .quiet ? NSColor.secondaryLabelColor : color(c.tone)]))
+        }
         it.attributedTitle = t
         it.toolTip = r.tip
         return it
@@ -460,7 +479,7 @@ if CommandLine.arguments.contains("--dump") {
         print("[아이콘] 작업 \(c.working) · 새로 완료 \(c.unseen) · 확인 \(c.waiting) · 실패 \(c.failed)")
         for g in buildGroups(snap, Badges()) {
             print("== \(g.title)")
-            for r in g.rows { print("  ● \(r.line1)\n      \(r.line2)") }
+            for r in g.rows { print("  ● \(r.line1)\n      \(r.line2)" + (r.ctx.map { " · 컨텍스트 \($0.left)% 남음\($0.tone == .quiet ? "" : $0.tone == .failed ? " [빨강]" : " [주황]")" } ?? "")) }
             if g.more > 0 { print("  … 외 \(g.more)개") }
         }
     }.resume()

@@ -14,7 +14,8 @@ opening a window.
 - **Menu**: needs you, newly finished (blue), working. Finished turns you
   already checked are left out. Each row has
   the session's number (①②③), its name and folder, then its status, the
-  failure reason or the current step, and a time. Hover for the full title,
+  failure reason or the current step, a time, and how much of its context
+  window is left (amber under 40%, red under 15%). Hover for the full title,
   folder, agent and account. Subagents and idle sessions are left out, as in
   the side panel.
 - **Blue (newly finished)**: the menu bar can't tell whether you read a reply

@@ -3543,43 +3543,43 @@
    "zone": "think"
   },
   {
-   "x": 15.5,
+   "x": 15.55,
    "y": 11.25,
    "yaw": 0,
    "anim": "emote-yes",
    "zone": "attention"
   },
   {
-   "x": 16.25,
+   "x": 16.65,
    "y": 11.25,
    "yaw": 0,
    "anim": "emote-yes",
    "zone": "attention"
   },
   {
-   "x": 16.95,
-   "y": 11.25,
+   "x": 15.55,
+   "y": 12.25,
    "yaw": 0,
    "anim": "emote-yes",
    "zone": "attention"
   },
   {
-   "x": 15.5,
-   "y": 11.95,
+   "x": 16.65,
+   "y": 12.25,
    "yaw": 0,
    "anim": "emote-yes",
    "zone": "attention"
   },
   {
-   "x": 16.25,
-   "y": 11.95,
+   "x": 15.55,
+   "y": 13.25,
    "yaw": 0,
    "anim": "emote-yes",
    "zone": "attention"
   },
   {
-   "x": 16.95,
-   "y": 11.95,
+   "x": 16.65,
+   "y": 13.25,
    "yaw": 0,
    "anim": "emote-yes",
    "zone": "attention"

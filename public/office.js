@@ -210,15 +210,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#1c1c1a' : '#ffffff';
   }
 
-  // Status ring under a person's feet, so state reads at a glance:
-  // green while working, amber (pulsing) when it needs you, red (pulsing) when
-  // the last turn failed; dashed when an active session has gone quiet (stuck).
-  const RING = { working: '#3fb950', waiting: '#f0a93a', failed: '#e5484d' };
+  // A soft glow on the ground under agents that need you: apricot when it is
+  // waiting on you (or has gone quiet for a while), coral when the request
+  // failed. Only live ones breathe; an old failed turn just stays faintly lit.
+  // Working agents get none: where they stand already says what they do.
+  const RING = { waiting: '#f09a45', failed: '#e8605c' };
   function ringFor(s) {
     if (!s) return null;
-    if (s.status === 'error' || (s.outcome && s.outcome.kind === 'failed')) return { color: RING.failed, pulse: true };
-    if (s.status === 'waiting') return { color: RING.waiting, pulse: true, dashed: s.stuck > 0 };
-    if (s.status === 'thinking' || s.status === 'tool' || s.status === 'typing') return { color: RING.working, dashed: s.stuck > 0 };
+    const live = s.status === 'waiting' || s.status === 'error';
+    if (s.status === 'error' || (s.outcome && s.outcome.kind === 'failed')) return { color: RING.failed, pulse: live };
+    if (s.status === 'waiting') return { color: RING.waiting, pulse: true };
+    if ((s.status === 'thinking' || s.status === 'tool' || s.status === 'typing') && s.stuck > 0) return { color: RING.waiting, pulse: false };
     return null;
   }
 
@@ -526,7 +528,7 @@
       spot(mx + 4.2, 0.65, 's', 'think');
       spot(mx + 4.0, PY + 0.75, 's', 'research');              // at the bookshelf
       spot(mx + 6.4, PY + 0.75, 's', 'research');
-      for (const ax of [1.0, 1.8, 2.6, 3.4]) spot(OW - ax, OD + 0.45, 'n', 'attention'); // out front, facing you
+      for (const ax of [1.0, 2.0, 3.0, 4.0]) spot(OW - ax, OD + 0.45, 'n', 'attention'); // out front, facing you
       return { W, D, OW, OD, MR, PY, RW, grid, items, props, pois, desks, windows, posters, pp, door: { x: 0.4, y: D - 1.2 } };
     }
 
@@ -747,27 +749,27 @@
       else for (const k of ['zoom', 'ox', 'oy']) this.cam[k] += (want[k] - this.cam[k]) * 0.1;
     }
 
+    // The status glow for a session (null: none), for renderers that draw it themselves.
+    ringOf(s) { return ringFor(s); }
+
     // Draws the status ring centred at (x, y); k scales it (1 = 2D size).
     statusRing(x, y, k, s) {
       const ring = ringFor(s);
       if (!ring) return;
       const c = this.ctx, t = this.t / 1000;
-      const pulse = ring.pulse ? 0.5 + 0.5 * Math.sin(t * 4) : 0;
-      const rx = 13 * k * (1 + 0.15 * pulse), ry = rx / 2;
+      // breathe slowly (about 2.5 s) rather than blink
+      const glow = ring.pulse ? 0.62 + 0.2 * Math.sin(t * 2.5) : 0.5;
+      const rx = 10.5 * k, ry = rx / 2;
       c.save();
-      c.globalAlpha = 0.25 + 0.15 * pulse;
-      c.fillStyle = ring.color;
-      c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.fill();
-      // A dark halo first, so the ring reads on light floors and grass alike.
-      c.globalAlpha = 0.35;
-      c.strokeStyle = '#000';
-      c.lineWidth = 4 * k;
-      c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.stroke();
-      c.globalAlpha = 0.95;
-      c.strokeStyle = ring.color;
-      c.lineWidth = 2 * k;
-      if (ring.dashed) { c.setLineDash([5 * k, 4 * k]); c.lineDashOffset = -t * 10 * k; }
-      c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.stroke();
+      c.translate(x, y);
+      c.scale(1, ry / rx);
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+      g.addColorStop(0, ring.color);
+      g.addColorStop(0.6, ring.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.globalAlpha = glow;
+      c.fillStyle = g;
+      c.beginPath(); c.arc(0, 0, rx, 0, Math.PI * 2); c.fill();
       c.restore();
     }
 
@@ -1724,12 +1726,14 @@
       this.hit = [];
       const heads = [];
       for (const it of items) {
-        if (it.person) heads.push([it.person, this.person(it.person)]);
-        else it.draw();
+        if (it.person) {
+          // the glow lies on the floor under the person, who is drawn over it
+          const fb = this.iso(it.person.x, it.person.y, 0);
+          this.statusRing(fb.x, fb.y, 1, it.person.s);
+          heads.push([it.person, this.person(it.person)]);
+        } else it.draw();
       }
       this.pingPongBall();
-      // Status rings go over the furniture, so desks and chairs never hide them.
-      for (const [p] of heads) { const fb = this.iso(p.x, p.y, 0); this.statusRing(fb.x, fb.y, 1, p.s); }
       if (this.compact) {
         // Keep labels readable when the room is scaled down for PiP.
         c.save();

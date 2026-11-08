@@ -1161,6 +1161,48 @@ export class Office3D extends window.Office {
     return st.face === 'back' ? Math.PI : 0;
   }
 
+  // The status glow lies on the ground in the 3D scene itself, so the agent
+  // stands in front of it and furniture can hide it (see ringOf in office.js).
+  syncGlows(t) {
+    if (!this.glows) {
+      this.glows = new Map();
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 128;
+      const c = cv.getContext('2d');
+      const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, 128, 128);
+      this.glowTex = new THREE.CanvasTexture(cv);
+      this.glowGeo = new THREE.PlaneGeometry(1, 1);
+      this.glowGeo.rotateX(-Math.PI / 2);
+    }
+    const seen = new Set();
+    for (const p of this.people.values()) {
+      const ring = this.actors.has(p.key) ? this.ringOf(p.s) : null;
+      if (!ring) continue;
+      seen.add(p.key);
+      let m = this.glows.get(p.key);
+      if (!m) {
+        m = new THREE.Mesh(this.glowGeo, new THREE.MeshBasicMaterial({ map: this.glowTex, transparent: true, depthWrite: false }));
+        m.renderOrder = 1;
+        this.scene.add(m);
+        this.glows.set(p.key, m);
+      }
+      m.material.color.set(ring.color);
+      m.material.opacity = ring.pulse ? 0.78 + 0.2 * Math.sin(t * 2.5) : 0.62;
+      const size = (p.s.subagent ? 0.8 : 1) * 1.35;
+      m.scale.set(size, 1, size);
+      const ground = this.plan.terrain ? this.groundHeight(p.x, p.y) : 0;
+      m.position.set(p.x, ground + 0.02, p.y);
+    }
+    for (const [k, m] of this.glows) {
+      if (!seen.has(k)) { this.scene.remove(m); m.material.dispose(); this.glows.delete(k); }
+    }
+  }
+
   syncActors(dt) {
     for (const [k, a] of this.actors) {
       if (!this.people.has(k)) { this.scene.remove(a.obj, a.prop); this.actors.delete(k); }
@@ -1378,6 +1420,7 @@ export class Office3D extends window.Office {
     this.updateBall();
 
     this.syncActors(dt);
+    this.syncGlows(t);
     if (this.insetMoving() || this.insetSettling) { this.fitCamera3D(false); this.insetSettling = this.insetMoving(); }
     this.controls.update();
     this.gl.render(this.scene, this.camera);
@@ -1404,7 +1447,6 @@ export class Office3D extends window.Office {
       this.hit.push({ key: p.key, x0: sx - 18, x1: sx + 18, y0: sy - 24, y1: fy + 4 });
     }
     heads.sort((a, b) => b[2] - a[2]);
-    for (const [p, at] of heads) this.statusRing(at.foot.x, at.foot.y, at.foot.k, p.s);
     for (const [p, at] of heads) this.bubble(p, at);
     if (this.offDuty > 0) {
       c.font = '600 11px ui-sans-serif, system-ui, -apple-system, "PingFang TC", sans-serif';

@@ -244,7 +244,8 @@
   .fgroup .fold .ui-ico { flex: none; width: 14px; height: 14px; transition: transform .15s; transform: rotate(90deg); }
   .fgroup.folded .fold .ui-ico { transform: none; }
   .fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fname small { color: var(--muted); font-weight: 500; }
+  .fname small, .nmt small { color: var(--muted); font-weight: 500; }
+  #detailTitle .frename { width: 100%; }
   .fcount { flex: none; color: var(--muted); font-size: 12px; font-weight: 500; }
   .fdot { flex: none; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
   .fdot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--s); }
@@ -482,7 +483,7 @@
       <div class="side-body" id="sideRows"></div>
     </div>
     <div class="side-pane" id="sideDetail" inert>
-      <div class="side-head"><button class="icon-btn" id="sideBack"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></button><b id="detailTitle"></b></div>
+      <div class="side-head"><button class="icon-btn" id="sideBack"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></button><b id="detailTitle"></b><button class="icon-btn" id="detailRename"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
       <div class="side-body" id="detailBody"></div>
     </div>
   </aside>
@@ -706,11 +707,13 @@ const accountChip = (s) => (accountName(s) ? `<span class="acct" title="${esc(s.
 // by the folder's full path so two folders with the same name stay apart.
 const T = (k) => L[k] ?? I18N.en[k] ?? k;
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const folders = { names: {}, colors: {}, folded: new Set() };
+const folders = { names: {}, colors: {}, folded: new Set(), sessions: {} };
 function loadFolders() {
   const obj = (v, ok) => Object.fromEntries(Object.entries(v && typeof v === 'object' && !Array.isArray(v) ? v : {}).filter(([k, x]) => k.length <= 1000 && ok(x)));
   folders.names = obj(store.get('folderNames', {}), (x) => typeof x === 'string' && x.trim() && x.length <= 60);
   folders.colors = obj(store.get('folderColors', {}), (x) => typeof x === 'string' && HEX.test(x));
+  // Your own names for single sessions, keyed by agent:id.
+  folders.sessions = obj(store.get('sessionNames', {}), (x) => typeof x === 'string' && x.trim() && x.length <= 80);
   const folded = store.get('folderFolded', []);
   folders.folded = new Set(Array.isArray(folded) ? folded.filter((x) => typeof x === 'string').slice(0, 500) : []);
 }
@@ -719,6 +722,7 @@ function saveFolders() {
   store.set('folderNames', folders.names);
   store.set('folderColors', folders.colors);
   store.set('folderFolded', [...folders.folded]);
+  store.set('sessionNames', folders.sessions);
 }
 const folderKey = (s) => s.cwd || `${s.agent}:`;
 // The folder's own name unless you renamed it.
@@ -726,7 +730,10 @@ const projectName = (s) => folders.names[folderKey(s)] || s.project || AGENT_NAM
 // Name-tag colour: the folder's, else the account's (WMAD_ACCOUNT_LABELS), else the default.
 const tagColor = (s) => folders.colors[folderKey(s)] || (s.account && HEX.test(s.account.color || '') ? s.account.color : null);
 // A session's own name inside its folder: its title (/rename or the desktop app's), else agent and start time.
-const sessionName = (s) => s.title || `${AGENT_NAME[s.agent] || s.agent} · ${hhmm(s.startedAt || s.lastEventAt)}`;
+// A session's own name: yours, else its title (/rename or the desktop app's), else agent and start time.
+const customName = (s) => folders.sessions[s.key] || '';
+const titleName = (s) => customName(s) || s.title || '';
+const sessionName = (s) => titleName(s) || `${AGENT_NAME[s.agent] || s.agent} · ${hhmm(s.startedAt || s.lastEventAt)}`;
 const groupRank = (s) => { const i = GROUPS.findIndex((g) => g.match(s.status)); return i < 0 ? GROUPS.length : i; };
 function folderGroups(list) {
   const map = new Map();
@@ -1095,7 +1102,7 @@ const officeOpts = {
   label: (s) => {
     // In a one-folder office every tag would repeat the folder, so name the session instead.
     const oneFolder = FOLDER && !FOLDER.includes(',');
-    const name = (s.agent === 'omp' && s.subagent && s.title) || (oneFolder ? s.title || AGENT_NAME[s.agent] || s.agent : projectName(s));
+    const name = customName(s) || (s.agent === 'omp' && s.subagent && s.title) || (oneFolder ? s.title || AGENT_NAME[s.agent] || s.agent : projectName(s));
     return accountName(s) ? `${name} · ${accountName(s)}` : name;
   },
   onHover(s, at, click) {
@@ -1284,7 +1291,7 @@ popout = new OfficePopout({
 // Both windows share preferences; keep filters, language, scene and badges in
 // sync even when changes come from the compact window or another open tab.
 window.addEventListener('storage', (e) => {
-  if (e.key === null || /^wmad\.folder(Names|Colors|Folded)$/.test(e.key)) { loadFolders(); renderNow(); if (e.key !== null) return; }
+  if (e.key === null || /^wmad\.(folder(Names|Colors|Folded)|sessionNames)$/.test(e.key)) { loadFolders(); renderNow(); if (e.key !== null) return; }
   if (e.key !== null && !Object.keys(PREF_DEFAULTS).some((k) => e.key === 'wmad.' + k)) return;
   Object.assign(state, readPreferences());
   renderLangMenu();
@@ -1386,10 +1393,12 @@ function renderSide() {
   const list = visible();
   document.getElementById('sideCount').textContent = list.length;
   document.getElementById('sideTabCount').textContent = `${L.agentsTitle} · ${list.length}`;
+  // By status a row is named after its session when it has a name, with the folder after it.
   const row = (s, i, name, inFolder, chip = true) => {
-    const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || (inFolder ? '' : s.title) || '';
+    const folder = !inFolder && name !== projectName(s) ? `<small> · ${esc(projectName(s))}</small>` : '';
+    const act = s.stuck ? L.stuck(s.stuck) : s.activity || (s.status === 'done' && s.reply) || (inFolder || s.title === name ? '' : s.title) || '';
     return `<button class="srow${s.subagent ? ' sub' : ''}${inFolder ? ' infolder' : ''}" data-key="${esc(s.key)}" style="--s:${statusColor(s.status)};--i:${Math.min(i, 14)}">
-        ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(name)}</span>${chip ? accountChip(s) : ''}</span>
+        ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(name)}${folder}</span>${chip ? accountChip(s) : ''}</span>
         <span class="tm" data-time="${esc(s.key)}"></span>
         <span class="st"><i></i><b>${esc(L[s.status] || s.status)}</b>${act ? `<span>${esc(act)}</span>` : ''}</span></button>`;
   };
@@ -1402,7 +1411,7 @@ function renderSide() {
       const items = list.filter((s) => g.match(s.status));
       if (!items.length) return '';
       return `<div class="side-group">${esc(L[g.key])} · ${items.length}</div>`
-        + items.map((s, i) => row(s, i + (g.key === 'working' ? 3 : g.key === 'finished' ? 8 : 0), projectName(s), false)).join('');
+        + items.map((s, i) => row(s, i + (g.key === 'working' ? 3 : g.key === 'finished' ? 8 : 0), titleName(s) || projectName(s), false)).join('');
     }).join('');
   const groupBtn = document.getElementById('sideGroupBtn');
   groupBtn.textContent = T(state.sideGroup === 'folder' ? 'byFolder' : 'byStatus');
@@ -1447,7 +1456,10 @@ function renderDetail(scrollDown) {
   const s = state.data.sessions.find((x) => x.key === sel);
   if (!s) { closeDetail(); return; }
   const now = Date.now() - state.skew;
-  document.getElementById('detailTitle').innerHTML = `${agentLogo(s.agent)}${esc(projectName(s))}`;
+  // Named after the session when it has a name; the folder is listed below.
+  if (!document.querySelector('#detailTitle input')) document.getElementById('detailTitle').innerHTML = `${agentLogo(s.agent)}<span>${esc(titleName(s) || projectName(s))}</span>`;
+  const renameBtn = document.getElementById('detailRename');
+  renameBtn.title = T('renameSession'); renameBtn.setAttribute('aria-label', T('renameSession'));
   // Fetch again whenever the agent logged something new.
   if (convo.at !== s.lastEventAt && !convo.busy) loadConvo(s);
   const body = document.getElementById('detailBody');
@@ -1460,7 +1472,7 @@ function renderDetail(scrollDown) {
           : `<div class="msg ${m.role}">${esc(m.text)}<span class="at">${esc(hhmm(m.at))}</span></div>`).join('')}</div>`;
   const resume = resumeCmd(s);
   const html = `
-    ${s.title && s.title !== projectName(s) ? `<div class="dtitle">${esc(s.title)}</div>` : ''}
+    ${customName(s) && s.title ? `<div class="dtitle">${esc(s.title)}</div>` : !titleName(s) || s.title === projectName(s) ? '' : `<div class="dtitle">${esc(projectName(s))}</div>`}
     <div class="dstatus" style="--s:${statusColor(s.status)}"><i></i><b>${esc(L[s.status] || s.status)}</b>${s.activity ? `<span class="act">${esc(s.activity)}</span>` : ''}${s.stuck ? `<span class="stuck">${esc(L.stuck(s.stuck))}</span>` : ''}</div>
     <dl class="dmeta">
       <dt>${esc(L.modelL)}</dt><dd>${esc(s.model || '—')}${s.subagent ? ` · ${esc(L.sub)}` : ''}</dd>
@@ -1530,6 +1542,38 @@ document.getElementById('sideRows').addEventListener('input', (e) => {
 document.getElementById('sideRows').addEventListener('change', (e) => {
   if (e.target.dataset?.color === undefined) return;
   saveFolders(); e.target.blur(); renderNow();
+});
+document.getElementById('detailRename').addEventListener('click', () => {
+  const key = sel;
+  const box = document.getElementById('detailTitle');
+  if (!key || box.querySelector('input')) return;
+  const s = state.data.sessions.find((x) => x.key === key);
+  const input = document.createElement('input');
+  input.className = 'frename';
+  input.value = folders.sessions[key] || '';
+  input.placeholder = (s && (s.title || projectName(s))) || '';
+  input.maxLength = 80;
+  input.setAttribute('aria-label', T('renameSession'));
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save) {
+      const v = input.value.trim();
+      if (v) folders.sessions[key] = v; else delete folders.sessions[key];
+      saveFolders();
+    }
+    input.remove();
+    renderNow();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+  box.replaceChildren(input);
+  input.focus();
+  input.select();
 });
 document.getElementById('sideGroupBtn').addEventListener('click', () => {
   state.sideGroup = state.sideGroup === 'folder' ? 'status' : 'folder';

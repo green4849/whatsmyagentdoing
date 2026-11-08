@@ -197,6 +197,11 @@ default. Folder names and colours apply to the office name tags too, and a
 folder colour wins over an account colour. They are kept in this browser, per
 port, keyed by the folder's full path.
 
+Rows are named after their session when it has a title, with the folder after
+it. To give a session your own name, open it and use the pencil next to its
+title; that name also goes on its office name tag. An empty name restores the
+title.
+
 ### One office per folder, account or agent
 
 `?folder=`, `?account=` and `?agent=` each narrow an office, and they combine:

@@ -54,8 +54,9 @@ waits at the bottom of that screen. Dragged off a window by hand, it stays
 where you put it until another Chrome window comes to the front. Only window
 positions and app names are read, not titles.
 
-It has a voice if you put short clips in `~/.whatsmyagentdoing/pet/sounds/`
-(outside the repo): `ask` (reached the corner for a session that needs you),
+It has a voice if you put short clips in `~/.whatsmyagentdoing/pet/sounds/<name>/`
+(outside the repo; `<name>` as in `<name>-sheet.png`, so `sounds/usagi/`, and
+clips directly in `sounds/` are used when that folder has none): `ask` (reached the corner for a session that needs you),
 `fail`, `done` (a turn finished), `welcome` (back after being away), `poke`
 (clicked), `drop` (let go after a drag; said every time, not held back by
 the spacing rules; picking it up is silent), `dance` (music started). `ask.m4a`, or variants `ask-1.m4a`, `ask-2.m4a` … picked at random;

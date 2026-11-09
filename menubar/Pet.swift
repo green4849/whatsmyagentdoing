@@ -57,7 +57,7 @@ func soundPlaying() -> Bool {
     return running != 0
 }
 
-// Its voice: short clips in ~/.whatsmyagentdoing/pet/sounds/ (outside the repo),
+// Its voice: short clips in ~/.whatsmyagentdoing/pet/sounds/<name>/ (outside the repo),
 // `ask.m4a` or variants `ask-1.m4a`, `ask-2.m4a` … picked at random. A missing
 // clip is just skipped. Kept rare: 8 s between any two sounds, 2 min between the
 // same one, one at a time (the order below is the priority), nothing while you're
@@ -112,8 +112,14 @@ final class Voice {
         }
     }
 
+    // Each character's clips are in sounds/<name>/ (the name of its sheet); clips left
+    // directly in sounds/ are the fallback, so older setups keep working.
     private func clip(_ k: Kind) -> URL? {
-        let dir = "\(PET_DIR)/sounds"
+        let root = "\(PET_DIR)/sounds"
+        return clip(k, in: "\(root)/\(PET_NAME)") ?? clip(k, in: root)
+    }
+
+    private func clip(_ k: Kind, in dir: String) -> URL? {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return nil }
         let exts: Set<String> = ["m4a", "wav", "mp3", "aiff", "caf"]
         let mine = names.filter { n in

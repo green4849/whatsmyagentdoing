@@ -238,6 +238,23 @@ Session names on tags (on by default) tags show the session's name (yours or
 its title) instead of the folder; give long sessions a short name with the
 pencil in the detail panel.
 
+### Project pages: your own notes per folder
+
+In the side panel's **By folder** view, click a folder's name (the chevron
+still just folds it) to open its project page, where you keep the plan in
+your own words:
+
+- **Steps**: add the stages of the work and click a step's circle to move it
+  along (to do → in progress → done; done steps get the date). The folder row
+  in the list then shows the current step and how many are done.
+- **Memo**: free text with bold, lists, to-dos and links; paste (⌘V) or drop
+  images in. Pasted text comes in as plain text.
+- The folder's sessions are listed underneath; the page title renames the folder.
+
+Everything saves as you type, on this Mac only, in
+`~/.whatsmyagentdoing/projects/<folder>-<hash>/` (`page.json` and `images/`).
+Nothing is uploaded anywhere.
+
 ### Where agents work: activity zones
 
 In rooms that have zones, what an agent is doing decides where it works:

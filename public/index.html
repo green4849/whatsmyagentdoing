@@ -258,6 +258,70 @@
   #detailTitle .frename { width: 100%; }
   .fcount { flex: none; color: var(--muted); font-size: 12px; font-weight: 500; }
   .fdot { flex: none; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
+  /* Project pages (src/projects.js): the folder row shows where the project stands. */
+  .fstage { display: flex; align-items: center; gap: 7px; max-width: calc(100% - 30px); margin: -2px 0 4px 27px; padding: 1px 6px 1px 2px; border: 0; border-radius: 6px; background: none; color: var(--muted); font: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+  .fstage:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+  .fstage .n { flex: none; font-weight: 500; color: var(--faint); }
+  .fstage span { overflow: hidden; text-overflow: ellipsis; }
+  .fstage .pbar { flex: none; width: 34px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 14%, transparent); overflow: hidden; }
+  .fstage .pbar i { display: block; height: 100%; background: var(--tool); }
+  .fstage.all .pbar i { background: var(--done); }
+  .fname { cursor: pointer; }
+  .fname:hover { text-decoration: underline; text-underline-offset: 3px; }
+  body.full .side.project { width: min(560px, calc(100vw - 24px)); }
+  body.full .side { transition: transform .32s cubic-bezier(.2, .8, .2, 1), box-shadow .32s, width .32s cubic-bezier(.2, .8, .2, 1); }
+  #sideProject { transform: translateX(100%); }
+  .side.project #sideProject { transform: none; }
+  .side.project #sideList, .side.project #sideDetail { transform: translateX(-22%); opacity: 0; }
+  .side-body.proj { padding: 4px 18px 18px; }
+  #projCrumb { font-weight: 500; color: var(--muted); font-size: 12px; }
+  .proj-title { display: flex; align-items: center; gap: 9px; margin: 12px 0 4px; }
+  .proj-title i { flex: none; width: 12px; height: 12px; border-radius: 4px; background: var(--fc, var(--faint)); }
+  .proj-title h2 { margin: 0; font-size: 20px; flex: 1; min-width: 0; outline: none; border-radius: 6px; padding: 1px 4px; margin-left: -4px; }
+  .proj-title h2:hover, .proj-title h2:focus { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .proj-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .proj-meta span { font-size: 11.5px; color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 999px; padding: 1px 9px; }
+  .proj-meta .warn { color: var(--waiting); }
+  .proj h3 { display: flex; align-items: center; gap: 8px; margin: 18px 0 8px; font-size: 11.5px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+  .proj h3 button { margin-left: auto; }
+  .pbtn { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 7px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+  .pbtn:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .steps { list-style: none; margin: 0; padding: 0; position: relative; }
+  .steps:not(:empty)::before { content: ""; position: absolute; left: 10px; top: 14px; bottom: 14px; width: 2px; background: var(--line); }
+  .steps li { position: relative; display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: start; padding: 5px 0; }
+  .steps .mark { position: relative; z-index: 1; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--faint); background: var(--panel); color: var(--faint); font: 800 11px/18px inherit; cursor: pointer; }
+  .steps li.done .mark { border-color: var(--done); background: var(--done); color: var(--panel); }
+  .steps li.doing .mark { border-color: var(--tool); color: var(--tool); box-shadow: 0 0 0 4px color-mix(in srgb, var(--tool) 18%, transparent); }
+  .steps .st, .steps .nt { outline: none; border-radius: 5px; padding: 0 3px; margin-left: -3px; min-height: 1.4em; }
+  .steps .st { font-weight: 600; }
+  .steps .nt { color: var(--muted); font-size: 12.5px; }
+  .steps .st:empty::before { content: attr(data-ph); color: var(--faint); font-weight: 500; }
+  .steps .nt:empty::before { content: attr(data-ph); color: var(--faint); }
+  .steps .st:focus, .steps .nt:focus { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .steps li.done .st { color: var(--muted); }
+  .steps .when { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; white-space: nowrap; padding-top: 2px; }
+  .steps li.doing .when { color: var(--tool); font-weight: 600; }
+  .steps .del { opacity: 0; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; }
+  .steps li:hover .del, .steps .del:focus { opacity: 1; }
+  .proj-empty { color: var(--muted); font-size: 12.5px; padding: 4px 0; }
+  .memo-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .memo { min-height: 110px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; outline: none; font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere; }
+  .memo:focus { border-color: color-mix(in srgb, var(--tool) 55%, var(--line)); }
+  .memo:empty::before { content: attr(data-ph); color: var(--faint); }
+  .memo p, .memo div { margin: 0 0 6px; }
+  .memo ul, .memo ol { margin: 0 0 6px; padding-left: 20px; }
+  .memo ul.todo { list-style: none; padding-left: 2px; }
+  .memo ul.todo li { padding-left: 22px; position: relative; }
+  .memo ul.todo li::before { content: ""; position: absolute; left: 2px; top: 4px; width: 12px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; cursor: pointer; }
+  .memo ul.todo li.ok { color: var(--muted); text-decoration: line-through; }
+  .memo ul.todo li.ok::before { background: var(--done); border-color: var(--done); }
+  .memo img { display: block; max-width: 100%; border-radius: 9px; border: 1px solid var(--line); margin: 6px 0; }
+  .memo a { color: var(--tool); }
+  .memo.drag { border-style: dashed; border-color: var(--tool); }
+  .memo-hint { margin-top: 6px; color: var(--faint); font-size: 11.5px; }
+  .proj-foot { flex: none; padding: 8px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-foot b { font-weight: 600; color: var(--done); }
+  .proj-foot b.bad { color: var(--error); }
   .fdot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--s); }
   .fbtn { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; opacity: 0; }
   .fgroup:hover .fbtn, .fgroup:focus-within .fbtn, .fbtn.freset { opacity: 1; }
@@ -497,6 +561,11 @@
     <div class="side-pane" id="sideDetail" inert>
       <div class="side-head"><button class="icon-btn" id="sideBack"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></button><b id="detailTitle"></b><button class="icon-btn" id="detailRename"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
       <div class="side-body" id="detailBody"></div>
+    </div>
+    <div class="side-pane" id="sideProject" inert>
+      <div class="side-head"><button class="icon-btn" id="projBack"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></button><b id="projCrumb"></b></div>
+      <div class="side-body proj" id="projBody"></div>
+      <div class="proj-foot" id="projFoot"></div>
     </div>
   </aside>
   <button class="side-tab" id="sideTab"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5L3 12l6.5 6.5M21 12H4"/></svg><span id="sideTabCount"></span></button>
@@ -781,13 +850,13 @@ function folderHead(g, all) {
   }).join('');
   const accounts = ACCOUNT ? [] : [...new Map(g.items.filter((s) => s.account).map((s) => [s.account.id, s])).values()];
   return `<div class="fgroup${folded ? ' folded' : ''}" style="--fc:${color || 'transparent'}">
-    <button class="fold" data-fold="${esc(g.key)}" aria-expanded="${!folded}">${CHEVRON}<span class="fname" title="${esc(s0.cwd || '')}">${esc(projectName(s0))}${parent ? `<small> · ${esc(parent)}</small>` : ''}</span><span class="fcount">${g.items.length}</span>${dots}</button>
+    <button class="fold" data-fold="${esc(g.key)}" aria-expanded="${!folded}">${CHEVRON}<span class="fname" title="${esc(T('openProject'))}${s0.cwd ? ` · ${esc(s0.cwd)}` : ''}">${esc(projectName(s0))}${parent ? `<small> · ${esc(parent)}</small>` : ''}</span><span class="fcount">${g.items.length}</span>${dots}</button>
     ${accounts.map(accountChip).join('')}
     ${s0.cwd ? `<button class="fbtn" data-open="${esc(g.key)}" title="${esc(T('openOffice'))}" aria-label="${esc(T('openOffice'))}">${OPEN_ICON}</button>` : ''}
     <button class="fbtn" data-rename="${esc(g.key)}" title="${esc(T('renameFolder'))}" aria-label="${esc(T('renameFolder'))}">${PENCIL}</button>
     <label class="fbtn fswatch" title="${esc(T('folderColor'))}"><input type="color" data-color="${esc(g.key)}" value="${esc(color || tagColor(s0) || '#8a8a85')}" aria-label="${esc(T('folderColor'))}"></label>
     ${color ? `<button class="fbtn freset" data-reset="${esc(g.key)}" title="${esc(T('resetColor'))}" aria-label="${esc(T('resetColor'))}">×</button>` : ''}
-  </div>`;
+  </div>${stageChip(g.key)}`;
 }
 function startRename(key) {
   const head = document.querySelector(`#sideRows .fold[data-fold="${CSS.escape(key)}"]`);
@@ -1505,9 +1574,11 @@ function renderSide() {
     box.querySelectorAll('[data-time]').forEach((el) => { const s = list.find((x) => x.key === el.dataset.time); if (s) el.textContent = timeLabel(s, now); });
   }
   if (sel) renderDetail();
+  if (proj?.key) renderProjectSessions();
 }
 
 function openDetail(key) {
+  if (proj?.key) closeProject();
   sel = key;
   if (!state.side) setSide(true);
   document.getElementById('sideList').inert = true;
@@ -1582,6 +1653,279 @@ function hubNotesHtml(s) {
   return `<div class="side-sec">${esc(T('hubNotes'))}${h.unread ? `<span class="hub-unread">${h.unread} ${esc(T('hubUnread'))}</span>` : ''}</div>
     <div class="hubnotes">${h.notes.map((n) => `<div class="hubnote ${n.dir}"><span class="who">${n.dir === 'in' ? '←' : '→'} ${esc(name(n.with))}</span><span class="kind">${esc(T('hubKind_' + n.kind))}</span><span class="at">${esc(hhmm(n.at))}</span>${n.excerpt ? `<div class="ex">${esc(n.excerpt)}</div>` : ''}</div>`).join('')}</div>`;
 }
+// ---- Project pages: your own steps and memo for a folder, kept on this Mac
+// (src/projects.js). The folder name opens it; the chevron still just folds.
+// var, not let: the side panel can draw before this part of the script has run.
+var projectSums = {};        // folder key -> { done, total, current, memo }
+var proj = { key: null, page: null, timer: null, saving: false, again: false, state: '' };
+const loadProjectSums = () => fetch('/api/projects').then((r) => r.json()).then((d) => { projectSums = d || {}; renderNow(); }).catch(() => {});
+function stageChip(key) {
+  const p = projectSums && projectSums[key];
+  if (!p || (!p.total && !p.current)) return '';
+  const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+  const all = p.total && p.done === p.total;
+  const label = all ? T('projAllDone') : p.current || '';
+  return `<button class="fstage${all ? ' all' : ''}" data-proj="${esc(key)}" title="${esc(T('openProject'))}"><span class="pbar"><i style="width:${pct}%"></i></span><span>${esc(label)}</span>${p.total ? `<span class="n">${p.done}/${p.total}</span>` : ''}</button>`;
+}
+// Only plain formatting, links out and this page's own images survive.
+const MEMO_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'UL', 'OL', 'LI', 'A', 'IMG', 'H3', 'H4', 'BLOCKQUOTE', 'CODE', 'PRE', 'SPAN']);
+const MEMO_IMG = /^\/projects\/[^/?#]+\/images\/[a-z0-9]+\.(png|jpg|gif|webp)$/;
+function cleanMemo(html) {
+  const doc = new DOMParser().parseFromString(`<body>${html || ''}</body>`, 'text/html');
+  const walk = (el) => {
+    for (const n of [...el.childNodes]) {
+      if (n.nodeType === 3) continue;
+      if (n.nodeType !== 1 || ['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'SVG', 'MATH'].includes(n.tagName.toUpperCase())) { n.remove(); continue; }
+      walk(n);
+      if (!MEMO_TAGS.has(n.tagName)) { n.replaceWith(...n.childNodes); continue; }
+      for (const a of [...n.attributes]) {
+        const keep = (n.tagName === 'A' && a.name === 'href' && /^https?:\/\//i.test(a.value))
+          || (n.tagName === 'IMG' && a.name === 'src' && MEMO_IMG.test(a.value))
+          || (a.name === 'class' && /^(todo|ok)$/.test(a.value));
+        if (!keep) n.removeAttribute(a.name);
+      }
+      if (n.tagName === 'IMG' && !n.getAttribute('src')) n.remove();
+    }
+  };
+  walk(doc.body);
+  return doc.body.innerHTML;
+}
+function openProject(key) {
+  if (sel) closeDetail();
+  if (!state.side) setSide(true);
+  proj = { key, page: null, timer: null, saving: false, again: false, state: '' };
+  document.getElementById('sideList').inert = true;
+  document.getElementById('sideProject').inert = false;
+  sideEl.classList.add('project');
+  // The panel widens; the room re-centres once the width has settled.
+  setTimeout(() => office?.setInset(panelInset(), true), 340);
+  document.getElementById('projBody').innerHTML = `<div class="msgs-note">${esc(L.loadingMsgs)}</div>`;
+  fetch(`/api/project?key=${encodeURIComponent(key)}`).then((r) => r.json()).then((page) => {
+    if (proj.key !== key) return;
+    page.memo = cleanMemo(page.memo);
+    proj.page = page;
+    renderProject();
+  }).catch(() => { if (proj.key === key) setProjState('error'); });
+}
+function closeProject() {
+  if (proj.timer) { clearTimeout(proj.timer); saveProject(); }
+  proj.key = null;
+  sideEl.classList.remove('project');
+  document.getElementById('sideList').inert = false;
+  document.getElementById('sideProject').inert = true;
+  setTimeout(() => office?.setInset(panelInset(), true), 340);
+}
+const projSessions = () => (state.data?.sessions || []).filter((s) => folderKey(s) === proj.key);
+function renderProject() {
+  const page = proj.page, key = proj.key;
+  const items = projSessions();
+  const s0 = items[0];
+  const name = s0 ? projectName(s0) : folders.names[key] || key.split(/[\\/]/).filter(Boolean).pop() || key;
+  document.getElementById('projCrumb').textContent = key.includes('/') || key.includes('\\') ? key : '';
+  const count = (k) => items.filter((s) => GROUPS.find((x) => x.key === k).match(s.status)).length;
+  const fc = folders.colors[key] || (s0 && tagColor(s0)) || '';
+  const steps = page.steps.map((st, i) => stepHtml(st, i)).join('');
+  document.getElementById('projBody').innerHTML = `
+    <div class="proj-title" style="--fc:${esc(fc || 'var(--faint)')}"><i></i><h2 id="projName" contenteditable="plaintext-only" spellcheck="false">${esc(name)}</h2></div>
+    <div class="proj-meta"><span>${esc(T('projSessions'))} ${items.length}</span>${count('working') ? `<span>${esc(L.working)} ${count('working')}</span>` : ''}${count('needsYou') ? `<span class="warn">${esc(L.needsYou)} ${count('needsYou')}</span>` : ''}</div>
+    <h3>${esc(T('projSteps'))}<button class="pbtn" id="projAddStep">+ ${esc(T('projStep'))}</button></h3>
+    <ol class="steps" id="projSteps">${steps}</ol>
+    ${page.steps.length ? '' : `<div class="proj-empty" id="projNoSteps">${esc(T('projNoSteps'))}</div>`}
+    <h3>${esc(T('projMemo'))}</h3>
+    <div class="memo-tools">
+      <button class="pbtn" data-cmd="bold"><b>B</b></button>
+      <button class="pbtn" data-cmd="insertUnorderedList">• ${esc(T('projList'))}</button>
+      <button class="pbtn" data-cmd="todo">☐ ${esc(T('projTodo'))}</button>
+      <button class="pbtn" data-cmd="image">${esc(T('projImage'))}</button>
+      <button class="pbtn" data-cmd="link">${esc(T('projLink'))}</button>
+      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" id="projFile" hidden multiple>
+    </div>
+    <div class="memo" id="projMemo" contenteditable="true" spellcheck="false" data-ph="${esc(T('projMemoPh'))}">${page.memo}</div>
+    <div class="memo-hint">${esc(T('projMemoHint'))}</div>
+    <h3>${esc(T('projSessionsH'))} · ${items.length}</h3>
+    <div id="projRows"></div>`;
+  renderProjectSessions();
+  setProjState(proj.state || (page.updatedAt ? 'saved' : ''));
+}
+function stepHtml(st, i) {
+  const when = st.state === 'doing' ? T('projDoing') : st.state === 'done' ? (st.at ? new Date(st.at).toLocaleDateString(langCode || undefined, { month: 'numeric', day: 'numeric' }) : '') : T('projTodoState');
+  return `<li class="${st.state}" data-i="${i}">
+    <button class="mark" data-step="${i}" title="${esc(T('projCycle'))}">${st.state === 'done' ? '✓' : st.state === 'doing' ? '●' : i + 1}</button>
+    <div><div class="st" contenteditable="plaintext-only" data-f="title" data-ph="${esc(T('projStepPh'))}">${esc(st.title)}</div><div class="nt" contenteditable="plaintext-only" data-f="note" data-ph="${esc(T('projNotePh'))}">${esc(st.note)}</div></div>
+    <span class="when">${esc(when)}<button class="del" data-del="${i}" title="${esc(T('projDelete'))}" aria-label="${esc(T('projDelete'))}">×</button></span>
+  </li>`;
+}
+// Just the session rows, so typing in the page is never interrupted by a redraw.
+function renderProjectSessions() {
+  const box = document.getElementById('projRows');
+  if (!box || !proj.key) return;
+  const now = Date.now() - state.skew;
+  const html = projSessions().map((s) => `<button class="srow infolder" data-key="${esc(s.key)}" style="--s:${statusCol(s)}">
+      ${agentLogo(s.agent) || '<span></span>'}<span class="nm"><span class="nmt">${esc(sessionName(s))}</span></span>
+      <span class="tm">${esc(timeLabel(s, now))}</span>
+      <span class="st"><i></i><b>${esc(statusLabel(s))}</b>${s.activity ? `<span>${esc(s.activity)}</span>` : ''}</span></button>`).join('')
+    || `<div class="proj-empty">${esc(T('projNoSessions'))}</div>`;
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+function setProjState(st) {
+  proj.state = st;
+  const foot = document.getElementById('projFoot');
+  const where = proj.page?.slug ? `~/.whatsmyagentdoing/projects/${proj.page.slug}/` : '';
+  foot.innerHTML = st === 'saving' ? esc(T('projSaving'))
+    : st === 'error' ? `<b class="bad">● ${esc(T('projSaveFailed'))}</b>`
+      : st === 'saved' ? `<b>● ${esc(T('projSaved'))}</b> · ${esc(T('projLocal'))} · ${esc(where)}`
+        : `${esc(T('projLocal'))} · ${esc(where)}`;
+}
+// Pull what is on screen back into the page, then save a moment after the last change.
+function readProject() {
+  if (!proj.page) return;
+  const memo = document.getElementById('projMemo');
+  if (memo) proj.page.memo = cleanMemo(memo.innerHTML);
+  document.querySelectorAll('#projSteps li').forEach((li) => {
+    const st = proj.page.steps[+li.dataset.i];
+    if (!st) return;
+    st.title = li.querySelector('.st').textContent.trim();
+    st.note = li.querySelector('.nt').textContent.trim();
+  });
+}
+function changedProject() {
+  readProject();
+  setProjState('saving');
+  clearTimeout(proj.timer);
+  proj.timer = setTimeout(saveProject, 700);
+}
+async function saveProject() {
+  proj.timer = null;
+  if (!proj.page) return;
+  if (proj.saving) { proj.again = true; return; }
+  proj.saving = true;
+  const key = proj.page.key;
+  try {
+    const r = await fetch(`/api/project?key=${encodeURIComponent(key)}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-whatsmyagentdoing': 'project' }, body: JSON.stringify({ steps: proj.page.steps, memo: proj.page.memo }) });
+    if (!r.ok) throw new Error(r.status);
+    const saved = await r.json();
+    if (proj.key === key) { proj.page.updatedAt = saved.updatedAt; proj.page.slug = saved.slug; setProjState('saved'); }
+    loadProjectSums();
+  } catch {
+    if (proj.key === key) setProjState('error');
+  } finally {
+    proj.saving = false;
+    if (proj.again) { proj.again = false; saveProject(); }
+  }
+}
+async function addProjectImages(files) {
+  const memo = document.getElementById('projMemo');
+  for (const f of files) {
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type)) continue;
+    setProjState('saving');
+    try {
+      const r = await fetch(`/api/project/image?key=${encodeURIComponent(proj.key)}`, { method: 'POST', headers: { 'content-type': f.type, 'x-whatsmyagentdoing': 'project' }, body: f });
+      const d = await r.json();
+      if (!r.ok || !d.src) throw new Error(d.error || r.status);
+      memo.focus();
+      document.execCommand('insertHTML', false, `<img src="${esc(d.src)}" alt=""><br>`);
+    } catch { setProjState('error'); return; }
+  }
+  changedProject();
+}
+function redrawSteps() {
+  readProject();
+  document.getElementById('projSteps').innerHTML = proj.page.steps.map((st, i) => stepHtml(st, i)).join('');
+  document.getElementById('projNoSteps')?.remove();
+  changedProject();
+}
+document.getElementById('projBack').addEventListener('click', closeProject);
+document.getElementById('projBody').addEventListener('click', (e) => {
+  if (!proj.page) return;
+  const t = e.target;
+  if (t.closest('#projAddStep')) {
+    readProject();
+    proj.page.steps.push({ id: Date.now().toString(36), title: '', note: '', state: proj.page.steps.some((s) => s.state === 'doing') ? 'todo' : 'doing', at: null });
+    redrawSteps();
+    document.querySelector('#projSteps li:last-child .st')?.focus();
+    return;
+  }
+  const mark = t.closest('[data-step]');
+  if (mark) {
+    readProject();
+    const st = proj.page.steps[+mark.dataset.step];
+    st.state = st.state === 'todo' ? 'doing' : st.state === 'doing' ? 'done' : 'todo';
+    st.at = st.state === 'done' ? Date.now() : null;
+    redrawSteps();
+    return;
+  }
+  const del = t.closest('[data-del]');
+  if (del) { readProject(); proj.page.steps.splice(+del.dataset.del, 1); redrawSteps(); return; }
+  const cmd = t.closest('[data-cmd]')?.dataset.cmd;
+  if (cmd) {
+    const memo = document.getElementById('projMemo');
+    if (cmd === 'image') { document.getElementById('projFile').click(); return; }
+    memo.focus();
+    if (cmd === 'todo') document.execCommand('insertHTML', false, '<ul class="todo"><li>&#8203;</li></ul>');
+    else if (cmd === 'link') { const u = prompt('https://'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
+    else document.execCommand(cmd);
+    changedProject();
+    return;
+  }
+  // a to-do's box toggles it
+  const li = t.closest('#projMemo ul.todo > li');
+  if (li && e.offsetX < 20) { li.classList.toggle('ok'); changedProject(); return; }
+  const a = t.closest('#projMemo a[href]');
+  if (a && (e.metaKey || e.ctrlKey)) { window.open(a.href, '_blank', 'noopener'); return; }
+  const row = t.closest('.srow');
+  if (row) { closeProject(); openDetail(row.dataset.key); }
+});
+document.getElementById('projBody').addEventListener('input', (e) => {
+  if (e.target.closest('#projMemo, #projSteps')) changedProject();
+});
+document.getElementById('projBody').addEventListener('change', (e) => {
+  if (e.target.id === 'projFile') { addProjectImages([...e.target.files]); e.target.value = ''; }
+});
+document.getElementById('projBody').addEventListener('keydown', (e) => {
+  // Enter ends a step title or note instead of adding a line.
+  if (e.key === 'Enter' && e.target.closest('#projSteps')) { e.preventDefault(); e.target.blur(); }
+  if (e.key === 'Enter' && e.target.id === 'projName') { e.preventDefault(); e.target.blur(); }
+});
+// The page title renames the folder, as the pencil in the list does.
+document.getElementById('projBody').addEventListener('focusout', (e) => {
+  if (e.target.id !== 'projName' || !proj.key) return;
+  const v = e.target.textContent.trim().slice(0, 60);
+  const s0 = projSessions()[0];
+  const natural = s0 ? (s0.project || AGENT_NAME[s0.agent] || s0.agent) : '';
+  if (!v || v === natural) delete folders.names[proj.key]; else folders.names[proj.key] = v;
+  saveFolders(); renderNow();
+});
+// Pasting: images are uploaded; anything else comes in as plain text.
+document.getElementById('projBody').addEventListener('paste', (e) => {
+  if (!e.target.closest('#projMemo')) return;
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+  e.preventDefault();
+  if (files.length) { addProjectImages(files); return; }
+  const text = e.clipboardData?.getData('text/plain') || '';
+  if (text) document.execCommand('insertText', false, text);
+});
+document.getElementById('projBody').addEventListener('dragover', (e) => {
+  const memo = e.target.closest?.('#projMemo');
+  if (memo && [...e.dataTransfer.items].some((i) => i.kind === 'file')) { e.preventDefault(); memo.classList.add('drag'); }
+});
+document.getElementById('projBody').addEventListener('dragleave', (e) => { e.target.closest?.('#projMemo')?.classList.remove('drag'); });
+document.getElementById('projBody').addEventListener('drop', (e) => {
+  const memo = e.target.closest?.('#projMemo');
+  if (!memo) return;
+  memo.classList.remove('drag');
+  const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
+  if (!files.length) return;
+  e.preventDefault();
+  addProjectImages(files);
+});
+// Leaving with a change not yet saved: send it on the way out.
+addEventListener('pagehide', () => {
+  if (!proj.timer || !proj.page) return;
+  clearTimeout(proj.timer); readProject();
+  fetch(`/api/project?key=${encodeURIComponent(proj.page.key)}`, { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json', 'x-whatsmyagentdoing': 'project' }, body: JSON.stringify({ steps: proj.page.steps, memo: proj.page.memo }) }).catch(() => {});
+});
+loadProjectSums();
+
 const GEAR = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>';
 
 async function loadConvo(s) {
@@ -1605,6 +1949,9 @@ document.getElementById('sideBack').addEventListener('click', closeDetail);
 document.getElementById('sideRows').addEventListener('mouseleave', (e) => { if (e.currentTarget.dataset.stale) renderSide(); });
 document.getElementById('sideRows').addEventListener('click', (e) => {
   const fold = e.target.closest('[data-fold]');
+  const projBtn = e.target.closest('[data-proj]');
+  if (projBtn) { openProject(projBtn.dataset.proj); return; }
+  if (fold && e.target.closest('.fname')) { openProject(fold.dataset.fold); return; }
   if (fold) {
     const k = fold.dataset.fold;
     if (!folders.folded.delete(k)) folders.folded.add(k);
@@ -1620,7 +1967,7 @@ document.getElementById('sideRows').addEventListener('click', (e) => {
 });
 document.getElementById('sideRows').addEventListener('dblclick', (e) => {
   const fold = e.target.closest('[data-fold]');
-  if (fold) { e.preventDefault(); startRename(fold.dataset.fold); }
+  if (fold && !e.target.closest('.fname')) { e.preventDefault(); startRename(fold.dataset.fold); }
 });
 // 'input' previews the colour live; the list redraws once the picker closes.
 document.getElementById('sideRows').addEventListener('input', (e) => {

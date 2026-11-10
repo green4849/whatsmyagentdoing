@@ -23,6 +23,18 @@ const { ompResumeCommand } = require('./omp');
 const { dayKey } = require('./parsers');
 const { matchAccount } = require('./accounts');
 const { characters: sharedCharacters } = require('./characters');
+const { Projects, MAX_PAGE, MAX_IMAGE } = require('./projects');
+
+// A request body, up to max bytes (null if it was larger).
+function readBody(req, max) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let n = 0;
+    req.on('data', (c) => { n += c.length; if (n > max) { req.destroy(); resolve(null); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 function serveFile(res, root, rel) {
   const file = path.normalize(path.join(root, rel));
@@ -168,6 +180,7 @@ function filterParams(url, opts) {
 }
 
 function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
+  const projects = opts.projects || new Projects();
   const clients = new Map(); // response -> filter key (JSON of normFilter)
   const last = new Map();    // filter key -> last body signature
 
@@ -244,6 +257,50 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
         (x) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: true, id: x.id })); },
         (e) => { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: false, error: String(e.message || e) })); },
       );
+    } else if (url.pathname === '/api/projects') {
+      // Your own project pages (src/projects.js): a summary per folder for the side panel.
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(projects.summaries()));
+    } else if (url.pathname === '/api/project') {
+      const key = url.searchParams.get('key') || '';
+      if (!key || key.length > 2000) { res.writeHead(400).end(); return; }
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(projects.get(key)));
+        return;
+      }
+      // Writes need a header web pages can't send cross-site (as for shutdown).
+      if (req.method !== 'POST' || req.headers['x-whatsmyagentdoing'] !== 'project') { res.writeHead(403).end(); return; }
+      readBody(req, MAX_PAGE).then((buf) => {
+        if (!buf) { res.writeHead(413).end(); return; }
+        let page;
+        try { page = JSON.parse(buf.toString('utf8')); } catch { res.writeHead(400).end(); return; }
+        const saved = projects.save(key, page);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(saved));
+      }, () => { if (!res.headersSent) res.writeHead(500).end(); });
+    } else if (url.pathname === '/api/project/image' && req.method === 'POST') {
+      const key = url.searchParams.get('key') || '';
+      if (!key || req.headers['x-whatsmyagentdoing'] !== 'project') { res.writeHead(403).end(); return; }
+      readBody(req, MAX_IMAGE).then((buf) => {
+        if (!buf) { res.writeHead(413).end(); return; }
+        try {
+          const src = projects.addImage(key, req.headers['content-type'] || '', buf);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ src }));
+        } catch (e) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: String(e.message || e) }));
+        }
+      }, () => { if (!res.headersSent) res.writeHead(500).end(); });
+    } else if (url.pathname.startsWith('/projects/')) {
+      let parts;
+      try { parts = url.pathname.slice('/projects/'.length).split('/').map(decodeURIComponent); }
+      catch { res.writeHead(400).end(); return; }
+      const img = parts.length === 3 && parts[1] === 'images' ? projects.imageFile(parts[0], parts[2]) : null;
+      if (!img) { res.writeHead(404).end(); return; }
+      res.writeHead(200, { 'content-type': img.type, 'cache-control': 'private, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' });
+      fs.createReadStream(img.file).pipe(res);
     } else if (url.pathname === '/api/transcript') {
       // --private hides prompts and replies everywhere, so it hides the conversation too.
       const key = url.searchParams.get('key') || '';

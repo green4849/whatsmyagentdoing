@@ -249,9 +249,8 @@
       this.visible = true;
       this.hit = [];
       this.hoverKey = null;
-      // Local hub notes: the newest seen, and envelopes in flight (see setHub).
-      this.hubSeq = null;
-      this.flights = [];
+      // Local hub: sessions that swap notes gather and face each other (see talk in update()).
+      this.talks = new Map();
       this.t = performance.now();
       this.pal = palette();
       this.plan = this.buildPlan(0);
@@ -281,7 +280,7 @@
         this.drawnAt = t;
         // Zoned rooms re-check activities once a second, so an agent that
         // keeps doing one thing moves even when no new log line arrives.
-        if (this.zoned && this.lastSessions && t - (this.zoneTick || 0) > 1000) {
+        if ((this.zoned || this.talking) && this.lastSessions && t - (this.zoneTick || 0) > 1000) {
           this.zoneTick = t;
           this.update(this.lastSessions);
         }
@@ -295,7 +294,7 @@
     // quiet, and full speed for a moment after you move the mouse or the panel slides.
     fpsCap(now) {
       if (!this.saver() || this.framesShown < 3) return 0;
-      if (now - this.pokedAt < 1500 || this.insetMoving(now) || this.flights.length) return 0;
+      if (now - this.pokedAt < 1500 || this.insetMoving(now)) return 0;
       for (const p of this.people.values()) {
         if (p.path.length || ['thinking', 'tool', 'typing', 'waiting'].includes(p.s.status)) return 20;
       }
@@ -571,7 +570,9 @@
       while (kept.size < MAX_WANDERERS && pool.length) {
         kept.add(pool.splice(Math.floor(Math.random() * pool.length), 1)[0].key);
       }
-      const wanderers = off.filter((s) => kept.has(s.key));
+      // Anyone in a conversation stays in view too, so they can gather (see updateTalk).
+      const talkers = new Set(Z && Z.talkGroups ? Z.talkGroups(sessions, Date.now()).flat() : []);
+      const wanderers = off.filter((s) => kept.has(s.key) || talkers.has(s.key));
       this.offDuty = off.length - wanderers.length;
 
       const cap = this.plan.desks.filter((d) => !d.spot).length;
@@ -634,7 +635,7 @@
         if (isWorker) {
           this.release(p);
           const desk = desks[this.deskOf.get(s.key)];
-          if (p.desk !== desk || p.mode !== 'work') { p.desk = desk; this.goTo(p, desk.seat); }
+          if (p.desk !== desk || p.mode !== 'work') { p.desk = desk; if (!p.talk) this.goTo(p, desk.seat); }
           p.mode = 'work';
         } else {
           if (p.mode !== 'wander') { p.mode = 'wander'; p.desk = null; p.poi = null; p.until = 0; }
@@ -646,12 +647,76 @@
         if (!shown.has(k) && !p.leaving) {
           p.leaving = true;
           p.mode = 'leave';
+          p.talk = null;
           this.release(p);
           p.desk = null;
           this.goTo(p, this.plan.door);
         }
       }
+      this.updateTalk(sessions.filter((s) => shown.has(s.key)));
       this.first = false;
+    }
+
+    // Sessions that swapped hub notes in the last few minutes gather: a pair
+    // faces each other, a bigger group stands in a ring facing the middle.
+    // Their desk stays theirs; they walk back when the talk goes quiet.
+    updateTalk(present) {
+      const Z = window.OfficeZones;
+      const groups = Z && Z.talkGroups ? Z.talkGroups(present, Date.now()) : [];
+      this.talking = groups.length > 0;
+      const spots = new Map();
+      const live = new Set();
+      for (const g of groups) {
+        const gk = g.join('|');
+        live.add(gk);
+        let t = this.talks.get(gk);
+        if (!t) {
+          const c = this.talkCenter(g);
+          t = { cx: c.x, cy: c.y, slots: Z.talkSlots(g.length, c.x, c.y) };
+          this.talks.set(gk, t);
+        }
+        g.forEach((k, i) => spots.set(k, { x: t.slots[i].x, y: t.slots[i].y, cx: t.cx, cy: t.cy }));
+      }
+      for (const gk of [...this.talks.keys()]) if (!live.has(gk)) this.talks.delete(gk);
+      for (const [k, p] of this.people) {
+        if (p.leaving) continue;
+        const spot = spots.get(k);
+        if (spot) {
+          if (!p.talk || p.talk.x !== spot.x || p.talk.y !== spot.y) {
+            this.release(p);
+            p.talk = spot;
+            this.goTo(p, spot);
+          }
+        } else if (p.talk) {
+          p.talk = null;
+          if (p.mode === 'work' && p.desk) this.goTo(p, p.desk.seat);
+          else { p.path = []; p.until = 0; }
+        }
+      }
+    }
+
+    // A free patch of floor for a group, near the middle of where its members
+    // belong (their desk or spot), so nobody crosses the whole room.
+    talkCenter(keys) {
+      const Z = window.OfficeZones;
+      const grid = this.plan.grid;
+      const anchor = (p) => (p.mode === 'work' && p.desk ? p.desk.seat : p.poi || p);
+      const ps = keys.map((k) => this.people.get(k)).filter(Boolean);
+      const mx = ps.reduce((a, p) => a + anchor(p).x, 0) / Math.max(1, ps.length);
+      const my = ps.reduce((a, p) => a + anchor(p).y, 0) / Math.max(1, ps.length);
+      const busy = [...this.talks.values()];
+      const fits = (x, y) => [{ x, y }, ...Z.talkSlots(keys.length, x, y)].every((q) => !grid.blocked(q.x, q.y))
+        && busy.every((t) => Math.hypot(t.cx - x, t.cy - y) > 2.2);
+      const meet = (this.plan.meet || []).slice().sort((a, b) => Math.hypot(a.x - mx, a.y - my) - Math.hypot(b.x - mx, b.y - my));
+      for (const m of meet) if (fits(m.x, m.y)) return m;
+      for (let r = 0; r <= 8; r += 0.25) {
+        const n = r ? Math.ceil(r * 8) : 1;
+        for (let i = 0; i < n; i++) {
+          const x = mx + Math.cos((2 * Math.PI * i) / n) * r, y = my + Math.sin((2 * Math.PI * i) / n) * r;
+          if (fits(x, y)) return { x, y };
+        }
+      }
+      return { x: mx, y: my };
     }
 
     release(p) {
@@ -684,7 +749,7 @@
     }
 
     wander(p, now) {
-      if (p.path.length) return;
+      if (p.talk || p.path.length) return;
       if (p.poi && now < p.until) return;
       this.release(p);
       const plan = this.plan;
@@ -763,22 +828,12 @@
     // The status glow for a session (null: none), for renderers that draw it themselves.
     ringOf(s) { return ringFor(s); }
 
-    // Notes between sessions (server snapshot `notes`). The first call only
-    // remembers where we are, so opening the page does not replay old notes.
-    setHub(notes) {
-      if (!Array.isArray(notes)) return;
-      const top = notes.reduce((m, n) => Math.max(m, n.seq || 0), 0);
-      if (this.hubSeq === null) { this.hubSeq = top; return; }
-      const start = performance.now();
-      for (const n of notes) {
-        if (n.seq > this.hubSeq && Date.now() - n.at < 120000) this.flights.push({ from: n.from, to: n.to, start });
-      }
-      this.hubSeq = Math.max(this.hubSeq, top);
-    }
+    // Notes between sessions (server snapshot `notes`). Conversations now show
+    // as agents gathering (update()), so nothing flies across the room any more.
+    setHub() {}
 
     // Drawn over the people, in the same space as their name tags (heads: [person, {x, y}]).
-    // An envelope over anyone with unread notes, one flying from sender to
-    // recipient for a new note, and dashed lines to partners of the hovered person.
+    // An envelope over anyone with unread notes, and dashed lines to partners of the hovered person.
     hubOverlay(heads) {
       const c = this.ctx;
       const at = new Map(heads.map(([p, a]) => [p.key, a]));
@@ -809,16 +864,6 @@
       for (const [p, a] of heads) {
         // Above the name tag, clear of speech and activity bubbles.
         if (p.s && p.s.hub && p.s.hub.unread > 0) env(a.x, a.y - 44 + Math.sin(t * 3 + p.phase) * 1.5, 1, 14);
-      }
-      const now = performance.now();
-      this.flights = this.flights.filter((f) => now - f.start < 1600);
-      for (const f of this.flights) {
-        const a = at.get(f.from), b = at.get(f.to);
-        if (!a || !b) continue;
-        const k = Math.min(1, (now - f.start) / 1400);
-        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-        const lift = Math.sin(Math.PI * e) * Math.max(30, Math.hypot(b.x - a.x, b.y - a.y) * 0.25);
-        env(a.x + (b.x - a.x) * e, a.y - 10 + (b.y - a.y) * e - lift, k > 0.85 ? (1 - k) / 0.15 : 1, 15);
       }
       c.restore();
     }
@@ -1373,6 +1418,13 @@
     stateOf(p) {
       const s = p.s || {};
       if (p.path.length) return { pose: 'walk', face: p.walkFace, act: null, sitZ: 0 };
+      if (p.talk) {
+        // facing the middle of the ring; the 2D figures only face front or back,
+        // so a pair standing side by side both face front
+        const toward = p.talk.cx - p.x + (p.talk.cy - p.y);
+        const face = toward > -0.2 ? 'front' : 'back';
+        return { pose: 'stand', face, act: 'talk', sitZ: 0 };
+      }
       if (p.mode === 'work' && p.desk) {
         const face = p.desk.side === 'n' ? 'front' : 'back';
         if (s.status === 'waiting' || s.status === 'error') return { pose: 'stand', face, act: 'wave', sitZ: 0 };

@@ -61,7 +61,58 @@
     return next;
   }
 
-  const api = { ZONES, STAY_MS, HOLD_MS, zoneOf, step, failed };
+  // ---- talking: sessions that exchanged hub notes lately gather and face each other.
+  const TALK_MS = 5 * 60000;
+
+  // Groups (sorted keys, two or more) of the given sessions linked by a note
+  // within TALK_MS, as connected groups: A↔B and B↔C make one group of three.
+  function talkGroups(sessions, now, windowMs = TALK_MS) {
+    const keys = new Set(sessions.map((s) => s.key));
+    const adj = new Map();
+    const link = (a, b) => {
+      if (!adj.has(a)) adj.set(a, new Set());
+      if (!adj.has(b)) adj.set(b, new Set());
+      adj.get(a).add(b);
+      adj.get(b).add(a);
+    };
+    for (const s of sessions) {
+      for (const n of (s.hub && s.hub.notes) || []) {
+        if (!n || !n.with || n.with === s.key || !keys.has(n.with)) continue;
+        if (!(now - n.at <= windowMs && n.at - now < 60000)) continue;
+        link(s.key, n.with);
+      }
+    }
+    const seen = new Set();
+    const groups = [];
+    for (const k of [...adj.keys()].sort()) {
+      if (seen.has(k)) continue;
+      const g = [];
+      const stack = [k];
+      seen.add(k);
+      while (stack.length) {
+        const x = stack.pop();
+        g.push(x);
+        for (const y of adj.get(x)) if (!seen.has(y)) { seen.add(y); stack.push(y); }
+      }
+      if (g.length > 1) groups.push(g.sort());
+    }
+    return groups;
+  }
+
+  // Where n members stand around (cx, cy). A pair lines up along x = -y, which
+  // runs across the screen in both views (the camera looks along x = y), so
+  // neither hides behind the other.
+  function talkSlots(n, cx, cy) {
+    const r = n === 2 ? 0.5 : 0.45 + 0.13 * n;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 4 + (2 * Math.PI * i) / n;
+      out.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    }
+    return out;
+  }
+
+  const api = { ZONES, STAY_MS, HOLD_MS, TALK_MS, zoneOf, step, failed, talkGroups, talkSlots };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfficeZones = api;
 })(typeof window !== 'undefined' ? window : this);

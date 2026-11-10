@@ -48,6 +48,7 @@ function scenePlan(def) {
   return {
     W: def.W, D: def.D, viewH: def.viewH, grid, items: [], props: [], pois, desks,
     windows: [], posters: [], pp: null, door: def.spawn, fixed: true, noNap: true, terrain: !!def.terrain, scene: def,
+    meet: def.meet || [], // optional spots where talking agents gather
   };
 }
 
@@ -1146,6 +1147,7 @@ export class Office3D extends window.Office {
 
   facing(p, st) {
     if (st.pose === 'walk') return null;
+    if (p.talk) return Math.atan2(p.talk.cx - p.x, p.talk.cy - p.y); // towards the other one / the middle
     if (p.mode === 'work' && p.desk) {
       if (p.desk.yaw != null) return p.desk.yaw;
       return p.desk.side === 'n' ? 0 : Math.PI;
@@ -1215,6 +1217,7 @@ export class Office3D extends window.Office {
         walk: 'walk', wave: 'emote-yes', coffee: 'holding-right', water: 'holding-right', read: 'holding-both',
         phone: 'holding-right', arcade: 'interact-right', whiteboard: 'interact-right', foosball: 'interact-left',
         pingpong: 'interact-right', vending: 'interact-right', fridge: 'interact-left', sink: 'interact-right',
+        talk: 'emote-yes',
       }[st.pose === 'walk' ? 'walk' : st.act] || (st.pose === 'sit' ? 'sit' : 'idle');
       let chosen = anim;
       if (st.act === 'station') chosen = p.s.status === 'thinking' ? 'idle' : (p.desk.anim || 'interact-right');

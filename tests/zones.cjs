@@ -79,3 +79,43 @@ test('no observation keeps the current zone', () => {
   const s = Z.step(Z.step(undefined, 'think', 0), null, 50000);
   assert.equal(s.zone, 'think');
 });
+
+// ---- talking: sessions that swapped hub notes gather
+const note = (w, at, dir = 'out') => ({ id: `n${at}`, dir, with: w, kind: 'task', at });
+const S = (key, notes = []) => ({ key, hub: { notes } });
+
+test('a pair that swapped a note lately is one talk group', () => {
+  const now = 1e9;
+  const groups = Z.talkGroups([S('claude:a', [note('codex:b', now - 60000)]), S('codex:b', [note('claude:a', now - 60000, 'in')]), S('claude:c')], now);
+  assert.deepEqual(groups, [['claude:a', 'codex:b']]);
+});
+
+test('chains join into one group, old notes and absent partners do not count', () => {
+  const now = 1e9;
+  const sessions = [
+    S('a', [note('b', now - 1000)]),
+    S('b', [note('c', now - 2000)]),
+    S('c'),
+    S('d', [note('e', now - Z.TALK_MS - 1)]), // too old
+    S('e'),
+    S('f', [note('ghost', now - 1000)]), // partner not in the room
+  ];
+  assert.deepEqual(Z.talkGroups(sessions, now), [['a', 'b', 'c']]);
+});
+
+test('a note with only one side present still links both when both are here', () => {
+  const now = 1e9;
+  // only the sender's list has the note (the other side may have it trimmed)
+  assert.deepEqual(Z.talkGroups([S('x', [note('y', now - 5000)]), S('y')], now), [['x', 'y']]);
+  assert.deepEqual(Z.talkGroups([S('x', [note('x', now)])], now), [], 'notes to oneself are ignored');
+});
+
+test('talk slots: a pair stands across the screen (x = -y), a group stands in a ring', () => {
+  const two = Z.talkSlots(2, 5, 5);
+  assert.equal(two.length, 2);
+  assert.ok(Math.abs(two[0].x + two[0].y - 10) < 1e-9 && Math.abs(two[1].x + two[1].y - 10) < 1e-9, 'side by side, not one behind the other');
+  assert.ok(Math.abs(Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y) - 1) < 1e-9, 'a step apart');
+  const four = Z.talkSlots(4, 0, 0);
+  const r = four.map((q) => Math.hypot(q.x, q.y));
+  assert.ok(r.every((v) => Math.abs(v - r[0]) < 1e-9) && r[0] > 0.5, 'a ring around the middle');
+});

@@ -7,7 +7,7 @@
 //
 //   SessionStart      join the hub; tell the agent its address; hand over waiting notes
 //   UserPromptSubmit  start a turn; hand over waiting notes
-//   Stop              notes arrived during the turn: keep going (at most twice a turn)
+//   Stop              notes arrived during the turn: keep going (at most twice in 10 minutes)
 //
 // Output follows the hook format both apps read: additionalContext for the
 // first two, { decision: "block", reason } to keep a turn going.
@@ -16,7 +16,10 @@ const { address } = require('./store');
 const { render } = require('./deliver');
 const { ancestors } = require('./identity');
 
+// Codex turns a Stop "block" into a new prompt (which fires UserPromptSubmit
+// again), so the cap counts continuations over time, not per turn.
 const MAX_BLOCKS = 2;
+const BLOCK_WINDOW = 10 * 60000;
 
 function context(event, text) {
   return text ? JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: text } }) : '';
@@ -44,7 +47,7 @@ function handle(store, agent, input, { lineage = () => ancestors(process.ppid) }
     if (event === 'UserPromptSubmit') {
       me = { agent, session: d.session_id };
       if (!store.session(me)) join();
-      store.setTurn(me, { startedAt: store.now(), blocks: 0 });
+      store.setTurn(me, { ...store.turn(me), startedAt: store.now() });
       store.setStatus(me, { state: 'working' });
       return context(event, render(store, store.unread(me, { take: true })));
     }
@@ -52,9 +55,10 @@ function handle(store, agent, input, { lineage = () => ancestors(process.ppid) }
       me = { agent, session: d.session_id };
       if (!store.session(me)) return '';
       const turn = store.turn(me);
-      const notes = turn.blocks < MAX_BLOCKS ? store.unread(me, { take: true }) : [];
+      const recent = (turn.blockedAt || []).filter((t) => store.now() - t < BLOCK_WINDOW);
+      const notes = recent.length < MAX_BLOCKS ? store.unread(me, { take: true }) : [];
       if (notes.length) {
-        store.setTurn(me, { ...turn, blocks: turn.blocks + 1 });
+        store.setTurn(me, { ...turn, blockedAt: [...recent, store.now()] });
         return JSON.stringify({ decision: 'block', reason: render(store, notes) });
       }
       store.setStatus(me, { state: 'done' });
@@ -64,4 +68,4 @@ function handle(store, agent, input, { lineage = () => ancestors(process.ppid) }
   return '';
 }
 
-module.exports = { handle, MAX_BLOCKS };
+module.exports = { handle, MAX_BLOCKS, BLOCK_WINDOW };

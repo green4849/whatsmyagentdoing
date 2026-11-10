@@ -98,7 +98,10 @@ test('hooks: join on start, notes at turn start, keep going at most twice when n
     assert.match(stop.reason, new RegExp(`mid-turn ${i}`));
   }
   s.send({ from: other, to: 'claude:cccc0001', body: 'third' });
-  assert.equal(handle(s, 'claude', ev('Stop'), { lineage }), '', 'never more than twice a turn');
+  // Codex turns a block into a new prompt; that must not reset the cap.
+  handle(s, 'claude', ev('UserPromptSubmit'), { lineage });
+  s.send({ from: other, to: 'claude:cccc0001', body: 'fourth' });
+  assert.equal(handle(s, 'claude', ev('Stop'), { lineage }), '', 'never more than twice in ten minutes');
   assert.equal(s.unread({ agent: 'claude', session: 'cccc0001' }).length, 1, 'the note waits for the next turn');
   assert.equal(handle(s, 'claude', 'not json'), '');
   assert.equal(handle(s, 'claude', ev('Stop', { session_id: 'unknown1' })), '', 'a session that never joined is left alone');

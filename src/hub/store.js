@@ -11,7 +11,7 @@
 //   messages.jsonl   a line per note, append only: { seq, id, at, from, to, kind, replyTo, depth, body }
 //   status/<key>.json   what a session says it is doing: { state, activity, at }
 //   read/<key>.json     { seq } — the last note this session has seen
-//   turn/<key>.json     { startedAt, blocks } — for the end-of-turn hook
+//   turn/<key>.json     { startedAt, blockedAt } — for the end-of-turn hook
 //
 // An address is "<agent>:<session>", e.g. "codex:01a1aa2b-…" or
 // "my-agent:h-3f9c…". Nothing here leaves this machine.
@@ -209,7 +209,7 @@ class HubStore {
 
   // ------------------------------------------------------------ turns (end-of-turn hook)
 
-  turn(me) { return this.readJson(path.join(this.dir, 'turn', `${keyOf(me)}.json`), { startedAt: 0, blocks: 0 }); }
+  turn(me) { return this.readJson(path.join(this.dir, 'turn', `${keyOf(me)}.json`), { startedAt: 0, blockedAt: [] }); }
   setTurn(me, t) { this.writeJson(path.join(this.dir, 'turn', `${keyOf(me)}.json`), t); }
 }
 

@@ -242,3 +242,22 @@ test('snapshot: notes between shown sessions, and no note text when private', ()
   assert.equal(priv.sessions[0].hub.notes[0].excerpt, null);
   assert.equal(priv.sessions[0].hub.unread, 1);
 });
+
+test('wait: returns when the other session ends a turn after we started waiting', async (t) => {
+  const { waitForTurnEnd, describe } = require('../src/hub/wait');
+  const s = new HubStore({ dir: path.join(tmp(t), 'hub') });
+  const other = s.register({ agent: 'claude', session: 'eeee0001', title: '배경화면 생성' });
+  s.setStatus(other, { state: 'done' });
+  const since = Date.now() + 5; // an earlier "done" does not count
+  const pending = waitForTurnEnd(s, 'claude:eeee0001', { since, poll: 20, timeoutMs: 2000 });
+  await new Promise((r) => setTimeout(r, 60));
+  s.setStatus(other, { state: 'working' });
+  await new Promise((r) => setTimeout(r, 60));
+  s.setStatus(other, { state: 'done' });
+  const r = await pending;
+  assert.equal(r.ended, true);
+  assert.match(describe(r, 'claude:eeee0001'), /배경화면 생성.*턴 종료: done/);
+  const late = await waitForTurnEnd(s, 'claude:eeee0001', { since: Date.now() + 1000, poll: 10, timeoutMs: 50 });
+  assert.equal(late.ended, false);
+  await assert.rejects(waitForTurnEnd(s, 'nope'), /address/);
+});

@@ -5,6 +5,7 @@
 //   hub.js mcp  [--agent <name>]   MCP server over stdio (add this to any agent app)
 //   hub.js hook  --agent <name>    lifecycle hook (SessionStart, UserPromptSubmit, Stop)
 //   hub.js who                     list registered sessions (for people)
+//   hub.js wait <address> [--hours n]  block until that session ends a turn (exit 0), or time out (exit 2)
 // The hub folder is ~/.whatsmyagentdoing/hub, or $WMAD_HUB_DIR.
 
 const { HubStore, address } = require('../src/hub/store');
@@ -30,11 +31,18 @@ if (cmd === 'mcp') {
     if (out) process.stdout.write(out + '\n');
     process.exit(0);
   });
+} else if (cmd === 'wait') {
+  const { waitForTurnEnd, describe } = require('../src/hub/wait');
+  const who = args[1];
+  const hours = Number(opt('hours')) || 3;
+  waitForTurnEnd(store(), who, { timeoutMs: hours * 3600e3 })
+    .then((r) => { console.log(describe(r, who)); process.exit(r.ended ? 0 : 2); })
+    .catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cmd === 'who') {
   const rows = store().sessions();
   if (!rows.length) console.log('허브에 등록된 세션이 없습니다.');
   for (const r of rows) console.log(`${address(r)}\t${r.title || '-'}\t${r.project ? r.project.name : '-'}\t${r.status ? r.status.state : '-'}`);
 } else {
-  console.error('usage: hub.js mcp [--agent <name>] | hook --agent <name> | who');
+  console.error('usage: hub.js mcp [--agent <name>] | hook --agent <name> | who | wait <address> [--hours n]');
   process.exit(1);
 }

@@ -249,6 +249,9 @@
       this.visible = true;
       this.hit = [];
       this.hoverKey = null;
+      // Local hub notes: the newest seen, and envelopes in flight (see setHub).
+      this.hubSeq = null;
+      this.flights = [];
       this.t = performance.now();
       this.pal = palette();
       this.plan = this.buildPlan(0);
@@ -292,7 +295,7 @@
     // quiet, and full speed for a moment after you move the mouse or the panel slides.
     fpsCap(now) {
       if (!this.saver() || this.framesShown < 3) return 0;
-      if (now - this.pokedAt < 1500 || this.insetMoving(now)) return 0;
+      if (now - this.pokedAt < 1500 || this.insetMoving(now) || this.flights.length) return 0;
       for (const p of this.people.values()) {
         if (p.path.length || ['thinking', 'tool', 'typing', 'waiting'].includes(p.s.status)) return 20;
       }
@@ -759,6 +762,66 @@
 
     // The status glow for a session (null: none), for renderers that draw it themselves.
     ringOf(s) { return ringFor(s); }
+
+    // Notes between sessions (server snapshot `notes`). The first call only
+    // remembers where we are, so opening the page does not replay old notes.
+    setHub(notes) {
+      if (!Array.isArray(notes)) return;
+      const top = notes.reduce((m, n) => Math.max(m, n.seq || 0), 0);
+      if (this.hubSeq === null) { this.hubSeq = top; return; }
+      const start = performance.now();
+      for (const n of notes) {
+        if (n.seq > this.hubSeq && Date.now() - n.at < 120000) this.flights.push({ from: n.from, to: n.to, start });
+      }
+      this.hubSeq = Math.max(this.hubSeq, top);
+    }
+
+    // Drawn over the people, in the same space as their name tags (heads: [person, {x, y}]).
+    // An envelope over anyone with unread notes, one flying from sender to
+    // recipient for a new note, and dashed lines to partners of the hovered person.
+    hubOverlay(heads) {
+      const c = this.ctx;
+      const at = new Map(heads.map(([p, a]) => [p.key, a]));
+      const env = (x, y, alpha = 1, size = 12) => {
+        c.globalAlpha = alpha;
+        c.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+        c.textAlign = 'center';
+        c.fillText('✉️', x, y);
+        c.globalAlpha = 1;
+      };
+      c.save();
+      const hp = this.hoverKey && this.people.get(this.hoverKey);
+      const from = hp && at.get(hp.key);
+      if (from && hp.s.hub && hp.s.hub.partners) {
+        c.setLineDash([4, 4]);
+        c.lineWidth = 1.5;
+        c.strokeStyle = this.pal.text;
+        c.globalAlpha = 0.4;
+        for (const k of hp.s.hub.partners) {
+          const to = at.get(k);
+          if (!to) continue;
+          c.beginPath(); c.moveTo(from.x, from.y - 4); c.lineTo(to.x, to.y - 4); c.stroke();
+        }
+        c.setLineDash([]);
+        c.globalAlpha = 1;
+      }
+      const t = this.t / 1000;
+      for (const [p, a] of heads) {
+        // Above the name tag, clear of speech and activity bubbles.
+        if (p.s && p.s.hub && p.s.hub.unread > 0) env(a.x, a.y - 44 + Math.sin(t * 3 + p.phase) * 1.5, 1, 14);
+      }
+      const now = performance.now();
+      this.flights = this.flights.filter((f) => now - f.start < 1600);
+      for (const f of this.flights) {
+        const a = at.get(f.from), b = at.get(f.to);
+        if (!a || !b) continue;
+        const k = Math.min(1, (now - f.start) / 1400);
+        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        const lift = Math.sin(Math.PI * e) * Math.max(30, Math.hypot(b.x - a.x, b.y - a.y) * 0.25);
+        env(a.x + (b.x - a.x) * e, a.y - 10 + (b.y - a.y) * e - lift, k > 0.85 ? (1 - k) / 0.15 : 1, 15);
+      }
+      c.restore();
+    }
 
     // Draws the status ring centred at (x, y); k scales it (1 = 2D size).
     statusRing(x, y, k, s) {
@@ -1746,12 +1809,13 @@
         // Keep labels readable when the room is scaled down for PiP.
         c.save();
         c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-        for (const [p, at] of heads) this.bubble(p, {
-          ...at, x: at.x * this.cam.zoom + this.cam.ox, y: at.y * this.cam.zoom + this.cam.oy,
-        });
+        const shown = heads.map(([p, at]) => [p, { ...at, x: at.x * this.cam.zoom + this.cam.ox, y: at.y * this.cam.zoom + this.cam.oy }]);
+        for (const [p, at] of shown) this.bubble(p, at);
+        this.hubOverlay(shown);
         c.restore();
       } else {
         for (const [p, at] of heads) this.bubble(p, at);
+        this.hubOverlay(heads);
       }
 
       if (this.offDuty > 0) {

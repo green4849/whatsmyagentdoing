@@ -124,6 +124,12 @@
   .acct { flex: none; padding: 1px 6px; margin-left: 4px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
   .dfail { margin: 8px 0 4px; padding: 8px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--error) 50%, transparent); background: color-mix(in srgb, var(--error) 10%, transparent); font-size: 12.5px; line-height: 1.45; }
   .dfail b { color: var(--error); margin-right: 4px; }
+  .hubnotes { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+  .hubnote { font-size: 12.5px; line-height: 1.4; padding: 6px 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent); }
+  .hubnote .who { font-weight: 600; margin-right: 6px; }
+  .hubnote .kind, .hubnote .at { color: var(--muted); font-size: 11.5px; margin-right: 6px; }
+  .hubnote .ex { color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+  .hub-unread { font-weight: 600; color: var(--waiting); margin-left: 6px; }
   .dfail .dguess { margin-top: 4px; color: var(--muted, inherit); opacity: .75; font-size: 11.5px; }
   .srow .badge { flex: none; margin-right: 4px; color: var(--s); font-weight: 700; }
   .acct[style] { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 18%, transparent); }
@@ -946,6 +952,7 @@ function render() {
     office.showAgent = state.showAgent;
     office.setVisible(officeMode && !poppedOut);
     office.update(officeList);
+    if (office.setHub) office.setHub(state.data.notes || []);
   }
   const agents = new Set(officeList.map(s => s.agent));
   const legend = document.getElementById('agentLegend');
@@ -1554,6 +1561,7 @@ function renderDetail(scrollDown) {
     </dl>
     ${contextBar(s.context)}
     ${resume ? `<div class="dactions"><button class="copy" data-copy="${esc(resume)}">${L.copy}</button></div>` : ''}
+    ${hubNotesHtml(s)}
     <div class="side-sec">${esc(L.recent)}</div>
     ${msgs}`;
   // The turn timer ticks on its own (tickTimes), so the panel only redraws when something changed.
@@ -1562,6 +1570,17 @@ function renderDetail(scrollDown) {
     const t = body.querySelector('[data-time]'); if (t) t.textContent = timeLabel(s, now);
     if (scrollDown || nearBottom) body.scrollTop = body.scrollHeight;
   }
+}
+// Notes this session sent to or got from other agents through the local hub.
+function hubNotesHtml(s) {
+  const h = s.hub;
+  if (!h || !h.notes || !h.notes.length) return '';
+  const name = (k) => {
+    const x = state.data.sessions.find((y) => y.key === k);
+    return x ? (titleName(x) || projectName(x)) : `${AGENT_NAME[k.split(':')[0]] || k.split(':')[0]} ${T('hubOther')}`;
+  };
+  return `<div class="side-sec">${esc(T('hubNotes'))}${h.unread ? `<span class="hub-unread">${h.unread} ${esc(T('hubUnread'))}</span>` : ''}</div>
+    <div class="hubnotes">${h.notes.map((n) => `<div class="hubnote ${n.dir}"><span class="who">${n.dir === 'in' ? '←' : '→'} ${esc(name(n.with))}</span><span class="kind">${esc(T('hubKind_' + n.kind))}</span><span class="at">${esc(hhmm(n.at))}</span>${n.excerpt ? `<div class="ex">${esc(n.excerpt)}</div>` : ''}</div>`).join('')}</div>`;
 }
 const GEAR = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>';
 

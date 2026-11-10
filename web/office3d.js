@@ -1448,6 +1448,7 @@ export class Office3D extends window.Office {
     }
     heads.sort((a, b) => b[2] - a[2]);
     for (const [p, at] of heads) this.bubble(p, at);
+    this.hubOverlay(heads);
     if (this.offDuty > 0) {
       c.font = '600 11px ui-sans-serif, system-ui, -apple-system, "PingFang TC", sans-serif';
       c.textAlign = 'left';

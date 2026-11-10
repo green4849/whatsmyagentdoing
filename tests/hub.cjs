@@ -196,3 +196,49 @@ test('a hook-registered session is found by its MCP server without hello', async
   const srv = new HubServer({ store: s, agent: 'codex', lineage: () => [600, 1] });
   assert.match(await srv.call('hub_who'), /내 주소: codex:01a1aa2b-1111/);
 });
+
+// ------------------------------------------------------------ dashboard side
+
+const { HubView } = require('../src/hub/view');
+
+test('dashboard view: unread counts, partners, recent notes and agents with no log reader', (t) => {
+  const now = clock();
+  const s = new HubStore({ dir: path.join(tmp(t), 'hub'), now });
+  const a = s.register({ agent: 'claude', session: 'aaaa1111', cwd: '/w/p' });
+  const b = s.register({ agent: 'my-agent', title: 'docs bot', cwd: '/w/docs' });
+  s.setStatus(b, { state: 'working', activity: 'writing the guide' });
+  s.send({ from: a, to: b, body: 'Write the setup guide for /w/docs.' });
+  now.add(1000);
+  s.send({ from: b, to: a, kind: 'reply', replyTo: s.messages()[0].id, body: 'Started.' });
+  s.unread(b, { take: true });
+  const v = new HubView(s, { known: new Set(['claude']) }).get(now(), now() - 3600e3);
+  const ka = 'claude:aaaa1111', kb = `my-agent:${b.session}`;
+  assert.equal(v.bySession.get(ka).unread, 1);
+  assert.equal(v.bySession.get(kb).unread, 0, 'read with hub_inbox');
+  assert.deepEqual(v.bySession.get(ka).partners, [kb]);
+  assert.deepEqual(v.bySession.get(ka).notes.map((n) => n.dir), ['in', 'out'], 'newest first');
+  assert.deepEqual(v.notes.map((n) => [n.from, n.to]), [[ka, kb], [kb, ka]]);
+  assert.equal(v.sessions.length, 1, 'only the agent the dashboard cannot read');
+  assert.equal(v.sessions[0].agent, 'my-agent');
+  assert.equal(v.sessions[0].status, 'tool');
+  assert.equal(v.sessions[0].activity, 'writing the guide');
+  assert.equal(v.sessions[0].title, 'docs bot');
+});
+
+test('snapshot: notes between shown sessions, and no note text when private', () => {
+  const { snapshot } = require('../src/server');
+  const nowMs = Date.now();
+  const hub = { unread: 1, partners: ['codex:bbbb2222'], notes: [{ id: 'n1', dir: 'in', with: 'codex:bbbb2222', kind: 'task', at: nowMs, excerpt: 'secret plan' }] };
+  const watcher = {
+    sessions: () => [{ agent: 'claude', id: 'aaaa1111', status: 'done', lastEventAt: nowMs, cwd: '/w', hub }],
+    hubNotes: () => [{ seq: 1, id: 'n1', at: nowMs, kind: 'task', from: 'codex:bbbb2222', to: 'claude:aaaa1111', excerpt: 'secret plan' },
+      { seq: 2, id: 'n2', at: nowMs, kind: 'note', from: 'x-agent:cccc', to: 'y-agent:dddd', excerpt: 'elsewhere' }],
+  };
+  const open = snapshot(watcher, { privacy: false });
+  assert.equal(open.sessions[0].hub.unread, 1);
+  assert.deepEqual(open.notes.map((n) => n.id), ['n1'], 'notes between sessions not shown are left out');
+  const priv = snapshot(watcher, { privacy: true });
+  assert.equal(priv.notes[0].excerpt, null);
+  assert.equal(priv.sessions[0].hub.notes[0].excerpt, null);
+  assert.equal(priv.sessions[0].hub.unread, 1);
+});

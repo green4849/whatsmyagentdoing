@@ -67,6 +67,8 @@ function view(s, now, { privacy }) {
     account: s.account || null,
     // How the last finished turn ended, when it failed or waits on you (see outcome.js).
     outcome: s.outcome || null,
+    // Notes to and from other sessions through the local hub (src/hub/view.js).
+    hub: s.hub || null,
     status,
     stuck,
     context: s.context ? { used: s.context, window: s.contextWindow || null } : null,
@@ -87,6 +89,7 @@ function view(s, now, { privacy }) {
   if (privacy) {
     out.prompt = out.reply = out.title = null;
     if (out.outcome) out.outcome = { kind: out.outcome.kind, detail: null, action: null, source: out.outcome.source, sure: out.outcome.sure };
+    if (out.hub) out.hub = { ...out.hub, notes: out.hub.notes.map((n) => ({ ...n, excerpt: null })) };
     // A question the agent ended on is conversation text, not a tool name.
     if (out.activity) out.activity = out.outcome?.kind === 'needs' ? null : out.activity.split(/[:\s]/)[0];
   }
@@ -150,7 +153,12 @@ function snapshot(watcher, opts, filter = DEFAULT_FILTER(opts)) {
     && matchFolder(f.folder, s.cwd) && (!f.agent.length || f.agent.includes(s.agent)));
   for (const s of sessions) s.character = chars.resolve(s);
   sessions.sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
-  return { now, lang: opts.demo ? null : promptLanguage(raw), account: f.account || null, folder: f.folder, agent: f.agent, sessions, summary: summary(sessions, now) };
+  // Notes between the sessions shown, for the flying-note motion; no text when private.
+  const shown = new Set(sessions.map((s) => s.key));
+  const notes = (typeof watcher.hubNotes === 'function' ? watcher.hubNotes() : [])
+    .filter((n) => shown.has(n.from) || shown.has(n.to))
+    .map((n) => (opts.privacy ? { ...n, excerpt: null } : n));
+  return { now, lang: opts.demo ? null : promptLanguage(raw), account: f.account || null, folder: f.folder, agent: f.agent, sessions, notes, summary: summary(sessions, now) };
 }
 
 // ?account= / ?folder= / ?agent= on the page or API override the command line; an empty value shows everyone.

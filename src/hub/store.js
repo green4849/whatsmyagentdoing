@@ -44,9 +44,12 @@ const address = (x) => `${x.agent}:${x.session}`;
 const keyOf = (x) => `${x.agent}-${x.session}`;
 
 // The project a folder belongs to: the nearest parent with .git, else the folder.
+// The Codex app keeps ChatGPT projects in hashed folders; name those plainly.
 function projectOf(cwd) {
   if (!cwd) return null;
   const dir = path.resolve(String(cwd));
+  const chat = dir.match(/^(.*[\\/]\.codex[\\/]\.chatgpt-projects[\\/]g-p-[0-9a-f]+)/);
+  if (chat) return { root: chat[1], name: 'ChatGPT 프로젝트' };
   for (let d = dir; ; d = path.dirname(d)) {
     try { if (fs.existsSync(path.join(d, '.git'))) return { root: d, name: path.basename(d) }; } catch {}
     if (path.dirname(d) === d) break;
@@ -57,9 +60,11 @@ function projectOf(cwd) {
 const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
 class HubStore {
-  constructor({ dir = dirOf(), now = () => Date.now() } = {}) {
+  // titles: optional { title(agent, session) } for sessions that joined without one (hub/titles.js).
+  constructor({ dir = dirOf(), now = () => Date.now(), titles = null } = {}) {
     this.dir = dir;
     this.now = now;
+    this.titles = titles;
     this.messagesFile = path.join(dir, 'messages.jsonl');
     this.sessionsFile = path.join(dir, 'sessions.jsonl');
   }
@@ -136,7 +141,11 @@ class HubStore {
       const prev = by.get(address(r));
       if (!prev || r.at >= prev.at) by.set(address(r), r);
     }
-    return [...by.values()].map((r) => ({ ...r, status: this.status(r) })).sort((a, b) => b.at - a.at);
+    const named = (r) => {
+      if (r.title || !this.titles) return r.title || null;
+      try { return this.titles.title(r.agent, r.session); } catch { return null; }
+    };
+    return [...by.values()].map((r) => ({ ...r, title: named(r), project: projectOf(r.cwd), status: this.status(r) })).sort((a, b) => b.at - a.at);
   }
 
   session(me) { return this.sessions().find((r) => address(r) === address(me)) || null; }

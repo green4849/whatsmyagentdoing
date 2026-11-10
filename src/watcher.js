@@ -19,6 +19,8 @@ const hook = require('./hook');
 const { transcript } = require('./transcript');
 const { AccountIndex, desktopSessionsDir } = require('./accounts');
 const { claudeOutcome, codexOutcome } = require('./outcome');
+const { HubStore } = require('./hub/store');
+const { HubView } = require('./hub/view');
 
 const HEAD_BYTES = 128 * 1024;
 const TAIL_BYTES = 768 * 1024;
@@ -268,6 +270,16 @@ class Watcher extends EventEmitter {
     this.externalKey = '';
     // Claude account per session, from the desktop app's session metadata.
     this.accounts = new AccountIndex({ dir: desktopSessionsDir(process.env, home, process.platform), labels: process.env.WMAD_ACCOUNT_LABELS });
+    // The local hub (src/hub): notes between sessions, and agents with no log reader.
+    this.hours = hours;
+    this.hub = new HubView(new HubStore({ dir: process.env.WMAD_HUB_DIR || path.join(home, '.whatsmyagentdoing', 'hub') }), {
+      known: new Set(['claude', 'codex', 'gemini', 'copilot', 'antigravity', 'opencode', 'hermes', 'omp', 'pi', ...Object.keys(CLIENT_DIRS), 'dsh']),
+    });
+  }
+
+  // Recent notes between sessions, for the flying-note motion (see src/hub/view.js).
+  hubNotes() {
+    try { return this.hub.get(Date.now(), Date.now() - this.hours * 3600e3).notes; } catch { return []; }
   }
 
   start() {
@@ -678,6 +690,12 @@ class Watcher extends EventEmitter {
         const s = out[i];
         if (s.agent === 'claude' && !s.subagent && s._rootUuid && !kept.has(s)) out.splice(i, 1);
       }
+    }
+    let hub = null;
+    try { hub = this.hub.get(Date.now(), Date.now() - this.hours * 3600e3); } catch { /* the hub is optional */ }
+    if (hub) {
+      for (const s of out) s.hub = hub.bySession.get(`${s.agent}:${s.id}`) || null;
+      out.push(...hub.sessions.map((s) => ({ ...s, hub: hub.bySession.get(`${s.agent}:${s.id}`) || null })));
     }
     out.push(...this.external);
     if (!this.magpies.length) return out;

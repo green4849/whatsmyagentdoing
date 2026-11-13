@@ -816,7 +816,7 @@ function renderToday() {
 
 // The Claude account a session ran under; hidden when the page already shows only one account.
 const accountName = (s) => (!ACCOUNT && s.account ? s.account.label : '');
-const accountChip = (s) => (accountName(s) ? `<span class="acct" title="${esc(s.account.id)}"${/^#[0-9a-f]{3,6}$/i.test(s.account.color || '') ? ` style="--ac:${s.account.color}"` : ''}>${esc(accountName(s))}</span>` : '');
+const accountChip = (s) => (accountName(s) ? `<span class="acct" title="${esc(s.account.id)}${s.account.viaLogin ? ' · ' + esc(T('viaLogin')) : ''}"${/^#[0-9a-f]{3,6}$/i.test(s.account.color || '') ? ` style="--ac:${s.account.color}"` : ''}>${esc(accountName(s))}</span>` : '');
 // ---- Folders: the side panel can group sessions by folder, and each folder can
 // get its own name and name-tag colour. Kept in this browser (per port), keyed
 // by the folder's full path so two folders with the same name stay apart.

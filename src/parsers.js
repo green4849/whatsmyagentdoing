@@ -162,6 +162,8 @@ const toolText = (content) => (typeof content === 'string' ? content
 
 function applyClaude(s, d) {
   const ts = stamp(s, d.timestamp);
+  // Which app wrote it: claude-desktop, cli, claude-vscode, sdk-cli…
+  if (d.entrypoint && !s._entrypoint) s._entrypoint = String(d.entrypoint).slice(0, 40);
   if (d.cwd) s.cwd = d.cwd;
   // A resumed conversation can be written to a new session file that copies
   // the whole history; such copies share the root message's uuid.

@@ -50,8 +50,11 @@ const validColor = (c) => typeof c === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6}
 const UUID_DIR = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i;
 
 class AccountIndex {
-  constructor({ dir = desktopSessionsDir(), labels = process.env.WMAD_ACCOUNT_LABELS } = {}) {
+  constructor({ dir = desktopSessionsDir(), labels = process.env.WMAD_ACCOUNT_LABELS, loginFile = null } = {}) {
     this.dir = dir;
+    // Claude Code's config (~/.claude.json): which account the terminal is signed in to.
+    this.loginFile = loginFile;
+    this.login = { mtime: 0, size: 0, account: null };
     this.labels = readLabels(labels);
     this.files = new Map();    // metadata file -> { mtime, size, account, ids }
     this.bySession = new Map(); // transcript id -> account uuid
@@ -65,10 +68,35 @@ class AccountIndex {
     return hit ? hit[1] : { label: id.slice(0, 8) };
   }
 
+  // Re-reads the terminal's signed-in account when its config file changed.
+  // Only oauthAccount.accountUuid is kept; nothing else from the file is used.
+  refreshLogin() {
+    if (!this.loginFile) return false;
+    let st;
+    try { st = fs.statSync(this.loginFile); } catch { const had = !!this.login.account; this.login = { mtime: 0, size: 0, account: null }; return had; }
+    if (st.mtimeMs === this.login.mtime && st.size === this.login.size) return false;
+    let account = null;
+    try {
+      const id = JSON.parse(fs.readFileSync(this.loginFile, 'utf8'))?.oauthAccount?.accountUuid;
+      if (typeof id === 'string' && UUID_DIR.test(id)) account = id.toLowerCase();
+    } catch { /* being rewritten; keep the last one */ account = this.login.account; }
+    const changed = account !== this.login.account;
+    this.login = { mtime: st.mtimeMs, size: st.size, account };
+    return changed;
+  }
+
+  // The terminal's signed-in account, for sessions the desktop app knows nothing
+  // about (terminal, VS Code, SDK). An inference: it is today's login, so a session
+  // from before switching accounts shows the new one. Marked viaLogin.
+  lookupLogin() {
+    const a = this.login.account;
+    return a ? { id: a.slice(0, 8), ...this.label(a), viaLogin: true } : null;
+  }
+
   // Rescans the metadata files; returns true when the mapping changed.
   refresh() {
     const seen = new Set();
-    let changed = false;
+    let changed = this.refreshLogin();
     for (const account of list(this.dir)) {
       if (!account.isDirectory() || !UUID_DIR.test(account.name)) continue;
       const adir = path.join(this.dir, account.name);

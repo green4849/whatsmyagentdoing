@@ -269,7 +269,8 @@ class Watcher extends EventEmitter {
     this.external = [];
     this.externalKey = '';
     // Claude account per session, from the desktop app's session metadata.
-    this.accounts = new AccountIndex({ dir: desktopSessionsDir(process.env, home, process.platform), labels: process.env.WMAD_ACCOUNT_LABELS });
+    this.accounts = new AccountIndex({ dir: desktopSessionsDir(process.env, home, process.platform), labels: process.env.WMAD_ACCOUNT_LABELS,
+      loginFile: path.join(process.env.CLAUDE_CONFIG_DIR || home, '.claude.json') });
     // The local hub (src/hub): notes between sessions, and agents with no log reader.
     this.hours = hours;
     this.hub = new HubView(new HubStore({ dir: process.env.WMAD_HUB_DIR || path.join(home, '.whatsmyagentdoing', 'hub') }), {
@@ -656,7 +657,12 @@ class Watcher extends EventEmitter {
         if (t) s.title = t;
       }
       // Subagent logs are named after themselves; their account is the parent's.
-      if (s.agent === 'claude') s.account = this.accounts.lookup(s.subagent ? s.parentId : s.id);
+      // Desktop sessions name their account; terminal/VS Code/SDK ones fall back to
+      // the account the terminal is signed in to now.
+      if (s.agent === 'claude') {
+        s.account = this.accounts.lookup(s.subagent ? s.parentId : s.id)
+          || (s._entrypoint && s._entrypoint !== 'claude-desktop' ? this.accounts.lookupLogin() : null);
+      }
       if (s.agent === 'claude') s.outcome = claudeOutcome(s, this.accounts.summary(s.id));
       else if (s.agent === 'codex') s.outcome = codexOutcome(s);
       // A turn that ended waiting on you (a question, or a step only you can

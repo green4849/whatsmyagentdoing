@@ -349,6 +349,38 @@
   .dmeta dt { color: var(--faint); }
   .dmeta dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dmeta dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  .dmeta dd.dchar { display: flex; align-items: center; gap: 6px; }
+  .dchar small { color: var(--muted); }
+  .dchar .dlink { margin-left: auto; flex: none; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--ink); font: inherit; font-size: 11.5px; cursor: pointer; }
+  .dchar .dlink:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .cdot { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); background: var(--c, #8a8a85); }
+  /* Character picker */
+  .cm-back { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 12px; background: rgba(0, 0, 0, .3); }
+  .cm { width: min(380px, 100%); max-height: calc(100vh - 24px); overflow: auto; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); box-shadow: 0 14px 44px rgba(0, 0, 0, .28); font-size: 13px; }
+  .cm-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .cm-head b { flex: none; }
+  .cm-head span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .cm-x { flex: none; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .cm-scopes { display: flex; gap: 2px; padding: 3px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 9px; }
+  .cm-scopes button { flex: 1; padding: 5px 6px; border: 0; border-radius: 6px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+  .cm-scopes button.on { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); font-weight: 600; }
+  .cm-note { margin: 6px 2px; color: var(--muted); font-size: 12px; }
+  .cm-note label { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--ink); cursor: pointer; }
+  .cm-models { display: grid; gap: 2px; margin: 8px 0; }
+  .cm-model { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+  .cm-model.on { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .cm-model > button { flex: 1; min-width: 0; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-model > button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .cm-model .tick { flex: none; width: 16px; color: var(--muted); }
+  .cm-sw { position: relative; flex: none; display: grid; place-items: center; width: 26px; height: 26px; overflow: hidden; border-radius: 6px; cursor: pointer; }
+  .cm-sw i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent); background: var(--c, #8a8a85); }
+  .cm-sw input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .cm-sw:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .cm-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .cm-reset { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+  .cm-reset:disabled { opacity: .4; cursor: default; }
+  .cm-hint { color: var(--faint); font-size: 11.5px; }
+  .cm-err { margin-top: 8px; color: var(--err, #c0392b); font-size: 12px; }
   .dstatus { display: flex; align-items: center; gap: 7px; margin: 8px 6px 0; font-size: 13px; flex-wrap: wrap; }
   .dstatus i { width: 8px; height: 8px; border-radius: 50%; background: var(--s); }
   .dstatus b { color: var(--s); }
@@ -836,6 +868,7 @@ function folderGroups(list) {
 const CHEVRON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5l6.5 6.5L9 18.5"/></svg>';
 const OPEN_ICON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 const PENCIL = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+const FACE_ICON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9 10.5v1M15 10.5v1M9 14.5c1 1.2 2 1.7 3 1.7s2-.5 3-1.7"/></svg>';
 function folderHead(g, all) {
   const s0 = g.items[0];
   // Two folders with the same name: add the parent folder so they can be told apart.
@@ -853,6 +886,7 @@ function folderHead(g, all) {
     <button class="fold" data-fold="${esc(g.key)}" aria-expanded="${!folded}">${CHEVRON}<span class="fname" title="${esc(T('openProject'))}${s0.cwd ? ` · ${esc(s0.cwd)}` : ''}">${esc(projectName(s0))}${parent ? `<small> · ${esc(parent)}</small>` : ''}</span><span class="fcount">${g.items.length}</span>${dots}</button>
     ${accounts.map(accountChip).join('')}
     ${s0.cwd ? `<button class="fbtn" data-open="${esc(g.key)}" title="${esc(T('openOffice'))}" aria-label="${esc(T('openOffice'))}">${OPEN_ICON}</button>` : ''}
+    ${s0.cwd ? `<button class="fbtn" data-charfolder="${esc(g.key)}" title="${esc(T('charL'))}" aria-label="${esc(T('charL'))}">${FACE_ICON}</button>` : ''}
     <button class="fbtn" data-rename="${esc(g.key)}" title="${esc(T('renameFolder'))}" aria-label="${esc(T('renameFolder'))}">${PENCIL}</button>
     <label class="fbtn fswatch" title="${esc(T('folderColor'))}"><input type="color" data-color="${esc(g.key)}" value="${esc(color || tagColor(s0) || '#8a8a85')}" aria-label="${esc(T('folderColor'))}"></label>
     ${color ? `<button class="fbtn freset" data-reset="${esc(g.key)}" title="${esc(T('resetColor'))}" aria-label="${esc(T('resetColor'))}">×</button>` : ''}
@@ -1626,6 +1660,7 @@ function renderDetail(scrollDown) {
     <dl class="dmeta">
       <dt>${esc(L.modelL)}</dt><dd>${esc(s.model || '—')}${s.subagent ? ` · ${esc(L.sub)}` : ''}</dd>
       ${s.account ? `<dt>${esc(L.accountL || 'Account')}</dt><dd title="${esc(s.account.id)}">${esc(s.account.label)}</dd>` : ''}
+      ${charRowHtml(s)}
       <dt>${esc(L.folderL)}</dt><dd class="mono" title="${esc(s.cwd || '')}">${esc(s.cwd || '—')}</dd>
       <dt>${esc(L.today)}</dt><dd>${s.today ? `${s.today.turns} ${esc(L.turnsL)} · ${fmtTokens(s.today.tokens)} ${esc(L.tokensL)}` : '—'}</dd>
       <dt></dt><dd data-time="${esc(s.key)}"></dd>
@@ -1653,6 +1688,119 @@ function hubNotesHtml(s) {
   return `<div class="side-sec">${esc(T('hubNotes'))}${h.unread ? `<span class="hub-unread">${h.unread} ${esc(T('hubUnread'))}</span>` : ''}</div>
     <div class="hubnotes">${h.notes.map((n) => `<div class="hubnote ${n.dir}"><span class="who">${n.dir === 'in' ? '←' : '→'} ${esc(name(n.with))}</span><span class="kind">${esc(T('hubKind_' + n.kind))}</span><span class="at">${esc(hhmm(n.at))}</span>${n.excerpt ? `<div class="ex">${esc(n.excerpt)}</div>` : ''}</div>`).join('')}</div>`;
 }
+// ---- Character picker: choose a model for a session, a folder or an account. The server
+// writes the choice into ~/.whatsmyagentdoing/characters.json (src/characters.js), so
+// that file stays the one place the rules live and hand edits keep working.
+// var, not let: the side panel can draw before this part of the script has run.
+var charInfo = null;  // { models: [{ name, color }], rules } from /api/characters
+var charMenu = null;  // { s, scope, clear, error } while the picker is open
+const charName = (m) => String(m).replace(/\.glb$/i, '');
+const loadChars = () => fetch('/api/characters', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
+  .then((d) => { if (d) charInfo = d; if (charMenu) renderCharMenu(); }).catch(() => {});
+// The "Character" row of the session panel: the model, which rule chose it, and the button.
+function charRowHtml(s) {
+  const r = s.characterRule;
+  const dot = `<i class="cdot" style="--c:${esc((s.character && s.character.color) || tagColor(s) || '#8a8a85')}"></i>`;
+  return `<dt>${esc(T('charL'))}</dt><dd class="dchar">${r ? `${dot}<span>${esc(charName(r.model))}</span><small>${esc(T('charVia_' + r.via))}</small>` : `<small>${esc(T('charDefault'))}</small>`}<button class="dlink" data-char="session">${esc(T('charChange'))}</button></dd>`;
+}
+const charScopeKey = (s, scope) => (scope === 'folder' ? s.cwd : scope === 'account' ? s.account && s.account.id : s.id);
+const trimSlash = (p) => String(p || '').replace(/\/+$/, '');
+const inFolder = (cwd, folder) => !!cwd && !!folder && (trimSlash(cwd) === trimSlash(folder) || cwd.startsWith(`${trimSlash(folder)}/`));
+// The model this scope sets now, or null when the scope has no rule of its own.
+function charCurrent(s, scope) {
+  const rules = charInfo && charInfo.rules;
+  if (!rules) return null;
+  const id = String(s.id || '').toLowerCase();
+  const acc = String(s.account && s.account.id || '').toLowerCase();
+  const hit = scope === 'session' ? rules.sessions.find((r) => id.startsWith(r.key))
+    : scope === 'folder' ? rules.folders.find((r) => trimSlash(r.key) === trimSlash(s.cwd))
+      : rules.accounts.find((r) => acc && (acc.startsWith(r.key) || r.key.startsWith(acc)));
+  return hit ? hit.model : null;
+}
+function openCharMenu(s, scope) {
+  closeCharMenu();
+  charMenu = { s, scope: scope || 'session', clear: false, error: '' };
+  loadChars();
+  renderCharMenu();
+}
+function closeCharMenu() {
+  charMenu = null;
+  const el = document.getElementById('charMenu');
+  if (el) el.remove();
+}
+function renderCharMenu() {
+  if (!charMenu) return;
+  const { s } = charMenu;
+  const scopes = ['session', ...(s.cwd ? ['folder'] : []), ...(s.account ? ['account'] : [])];
+  if (!scopes.includes(charMenu.scope)) charMenu.scope = scopes[0];
+  const scope = charMenu.scope;
+  const sessions = (state.data && state.data.sessions) || [];
+  const cur = charCurrent(s, scope);
+  const models = (charInfo && charInfo.models) || [];
+  // A session's own setting beats its folder's, and a folder's beats its account's:
+  // say so, and offer to clear the settings that would hide the change.
+  const own = scope === 'folder' ? sessions.filter((x) => inFolder(x.cwd, s.cwd) && x.characterRule && x.characterRule.via === 'session') : [];
+  const shadow = scope === 'account' ? sessions.filter((x) => x.account && x.account.id === s.account.id && x.characterRule && x.characterRule.via !== 'account') : [];
+  const target = scope === 'session' ? (titleName(s) || projectName(s)) : scope === 'folder' ? (s.cwd || projectName(s)) : (s.account && s.account.label) || '';
+  const noteHtml = own.length
+    ? `<div class="cm-note">${esc(T('charOwn')(own.length))}<label><input type="checkbox" data-cm-clear ${charMenu.clear ? 'checked' : ''}> ${esc(T('charAlso'))}</label></div>`
+    : shadow.length ? `<div class="cm-note">${esc(T('charShadow')(shadow.length))}</div>` : '';
+  // Where this session's look comes from now, when the chosen scope has no setting of its own.
+  const nowHtml = !cur && s.characterRule ? `<div class="cm-note">${esc(T('charNow')(charName(s.characterRule.model), T('charVia_' + s.characterRule.via)))}</div>` : '';
+  const html = `<div class="cm-back" data-cm-back><div class="cm" role="dialog" aria-modal="true" aria-label="${esc(T('charL'))}">
+    <div class="cm-head"><b>${esc(T('charPick'))}</b><span title="${esc(target)}">${esc(target)}</span><button class="cm-x" data-cm-close aria-label="${esc(T('charClose'))}">×</button></div>
+    <div class="cm-scopes">${scopes.map((k) => `<button data-cm-scope="${k}" class="${k === scope ? 'on' : ''}">${esc(T('charScope_' + k))}</button>`).join('')}</div>
+    ${nowHtml}${noteHtml}
+    <div class="cm-models">${models.length ? models.map((m) => `<div class="cm-model${m.name === cur ? ' on' : ''}">
+      <label class="cm-sw" title="${esc(T('charTagColor'))}"><i style="--c:${esc(m.color || '#8a8a85')}"></i><input type="color" data-cm-color="${esc(m.name)}" value="${esc(m.color || '#8a8a85')}" aria-label="${esc(T('charTagColor'))}"></label>
+      <button data-cm-model="${esc(m.name)}">${esc(charName(m.name))}</button><span class="tick">${m.name === cur ? '✓' : ''}</span></div>`).join('')
+    : `<div class="cm-note">${esc(T('charNone'))}</div>`}</div>
+    <div class="cm-foot"><button class="cm-reset" data-cm-model="" ${cur ? '' : 'disabled'}>${esc(T('charReset'))}</button><span class="cm-hint">● ${esc(T('charTagColor'))}</span></div>
+    ${charMenu.error ? `<div class="cm-err">${esc(charMenu.error)}</div>` : ''}
+  </div></div>`;
+  let el = document.getElementById('charMenu');
+  if (!el) { el = document.createElement('div'); el.id = 'charMenu'; document.body.appendChild(el); }
+  // A colour picker that is open must not be rebuilt under the user's hand.
+  if (el.contains(document.activeElement) && document.activeElement.type === 'color') return;
+  el.innerHTML = html;
+}
+async function charPost(body) {
+  try {
+    const r = await fetch('/api/characters', { method: 'POST', headers: { 'content-type': 'application/json', 'x-whatsmyagentdoing': 'characters' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    charInfo = d;
+    return true;
+  } catch (e) {
+    if (charMenu) { charMenu.error = `${T('charFail')}: ${e.message}`; renderCharMenu(); }
+    return false;
+  }
+}
+document.addEventListener('click', async (e) => {
+  const open = e.target.closest('[data-char]');
+  if (open) { const s = state.data.sessions.find((x) => x.key === sel); if (s) openCharMenu(s, 'session'); return; }
+  const fold = e.target.closest('[data-charfolder]');
+  if (fold) { const s = state.data.sessions.find((x) => folderKey(x) === fold.dataset.charfolder); if (s) openCharMenu(s, 'folder'); return; }
+  if (!charMenu) return;
+  if (e.target.closest('[data-cm-close]') || e.target.matches('[data-cm-back]')) { closeCharMenu(); return; }
+  const sc = e.target.closest('[data-cm-scope]');
+  if (sc) { charMenu.scope = sc.dataset.cmScope; charMenu.error = ''; renderCharMenu(); return; }
+  const pick = e.target.closest('[data-cm-model]');
+  if (pick && !pick.disabled) {
+    const { s, scope, clear } = charMenu;
+    const key = charScopeKey(s, scope);
+    const clearSessions = scope === 'folder' && clear
+      ? state.data.sessions.filter((x) => inFolder(x.cwd, s.cwd) && x.characterRule && x.characterRule.via === 'session').map((x) => x.id) : [];
+    if (await charPost({ op: 'assign', scope, key, model: pick.dataset.cmModel || null, clearSessions })) closeCharMenu();
+  }
+});
+document.addEventListener('change', async (e) => {
+  if (e.target.matches('[data-cm-clear]') && charMenu) { charMenu.clear = e.target.checked; return; }
+  const c = e.target.dataset && e.target.dataset.cmColor;
+  if (!c || !charMenu) return;
+  if (await charPost({ op: 'color', model: c, color: e.target.value })) { e.target.blur(); renderCharMenu(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && charMenu) { e.stopPropagation(); closeCharMenu(); } }, true);
 // ---- Project pages: your own steps and memo for a folder, kept on this Mac
 // (src/projects.js). The folder name opens it; the chevron still just folds.
 // var, not let: the side panel can draw before this part of the script has run.

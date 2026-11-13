@@ -300,6 +300,18 @@ and say who wears which in `~/.whatsmyagentdoing/characters.json`:
 it. A folder colour you picked in the page still wins; without one, the tag
 keeps the account colour.
 
+You can also pick from the page instead of editing the file: open a session in
+the side panel and press **Change** on its *Character* row, or press the face
+icon on a folder's heading. Choose a scope (this session, this folder or this
+account), then a model; *Back to default* removes that scope's rule. The
+swatch beside each model sets its name-tag colour. A session's own choice beats
+its folder's, so when you change a folder the picker says how many sessions were
+set by hand and can change them too. The page writes the same `characters.json`
+(the previous copy is kept as `characters.json.bak`), so hand edits keep
+working, and changes show up without a restart. Writing goes through
+`POST /api/characters`, which, like the other writes, needs the
+`x-whatsmyagentdoing: characters` header that other web pages can't send.
+
 A folder covers its subfolders (the deepest match wins); accounts and
 sessions match by id prefix; session beats folder beats account. `turn`
 rotates a model that faces away (degrees), `height` sizes it against the stock

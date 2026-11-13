@@ -98,16 +98,31 @@ class Characters {
     console.warn(msg);
   }
 
-  // { url, turn?, height?, color? } for a session view, or null for the stock characters.
-  resolve(s) {
+  // The rule a session falls under: [via, key, spec] with via 'session', 'folder' or 'account'.
+  match(s) {
     const id = String(s.id || '').toLowerCase();
     const cwd = s.cwd ? normPath(s.cwd) : '';
     const account = String(s.account && s.account.id || '').toLowerCase();
-    const hit = (id && this.rules.sessions.find(([k]) => id.startsWith(k)))
-      || (cwd && this.rules.folders.find(([k]) => cwd === k || cwd.startsWith(k === '/' ? '/' : `${k}/`)))
-      || (account && this.rules.accounts.find(([k]) => account.startsWith(k) || k.startsWith(account)));
+    let hit = id && this.rules.sessions.find(([k]) => id.startsWith(k));
+    if (hit) return ['session', ...hit];
+    hit = cwd && this.rules.folders.find(([k]) => cwd === k || cwd.startsWith(k === '/' ? '/' : `${k}/`));
+    if (hit) return ['folder', ...hit];
+    hit = account && this.rules.accounts.find(([k]) => account.startsWith(k) || k.startsWith(account));
+    return hit ? ['account', ...hit] : null;
+  }
+
+  // { via, model } for the page's "Character" row: which kind of rule picked the model.
+  rule(s) {
+    const hit = this.match(s);
+    if (!hit || this.versions.get(hit[2].model) == null) return null;
+    return { via: hit[0], model: hit[2].model };
+  }
+
+  // { url, turn?, height?, color? } for a session view, or null for the stock characters.
+  resolve(s) {
+    const hit = this.match(s);
     if (!hit) return null;
-    const { model, ...rest } = hit[1];
+    const { model, ...rest } = hit[2];
     const v = this.versions.get(model);
     if (v == null) return null;
     const color = this.colors.get(model);
@@ -119,6 +134,101 @@ class Characters {
     if (!MODEL_NAME.test(name)) return null;
     const file = path.join(this.models, name);
     return path.dirname(file) === this.models && fs.existsSync(file) ? file : null;
+  }
+
+  // ---- Editing from the page. characters.json stays the single source of truth;
+  // these read it fresh, change one thing, and write it back (temp file + rename,
+  // after keeping the previous copy as characters.json.bak).
+
+  // What the page's picker shows: every model file, its name-tag colour, and the rules.
+  listing() {
+    this.refresh();
+    let names = [];
+    try { names = fs.readdirSync(this.models).filter((n) => MODEL_NAME.test(n)).sort(); } catch { /* no models folder yet */ }
+    // Keys come back as the server reads them (folders as absolute paths), so the page can compare them to a session's folder.
+    const show = ([key, s]) => ({ key, ...s });
+    return {
+      models: names.filter((n) => this.modelFile(n)).map((name) => ({ name, color: this.colors.get(name) || null })),
+      rules: { folders: this.rules.folders.map(show), accounts: this.rules.accounts.map(show), sessions: this.rules.sessions.map(show) },
+    };
+  }
+
+  readConfig() {
+    let text = null;
+    try { text = fs.readFileSync(this.file, 'utf8'); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+    if (text === null) return {};
+    let obj;
+    try { obj = JSON.parse(text); } catch (e) { throw new Error(`characters.json is not valid JSON (${e.message}); fix it by hand first`); }
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('characters.json must hold an object');
+    return obj;
+  }
+
+  writeConfig(obj) {
+    fs.mkdirSync(this.dir, { recursive: true });
+    if (fs.existsSync(this.file)) fs.copyFileSync(this.file, `${this.file}.bak`);
+    const tmp = `${this.file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(obj, null, 2)}\n`);
+    fs.renameSync(tmp, this.file);
+    this.stamp = null; // read it again on the next refresh, even within the same millisecond
+  }
+
+  // Give a session, folder or account a model, or take its rule away when model is null.
+  // scope 'session': key is the session id (rules keep its first 12 characters);
+  // scope 'folder': key is the folder path; scope 'account': key is the account id.
+  // clearSessions: ids of sessions whose own rule should go too (so a folder change reaches them).
+  assign({ scope, key, model, clearSessions = [] }) {
+    if (!['session', 'folder', 'account'].includes(scope)) throw new Error('unknown scope');
+    if (typeof key !== 'string' || !key.trim() || key.length > 1000) throw new Error('bad key');
+    if (model !== null && !(typeof model === 'string' && MODEL_NAME.test(model) && this.modelFile(model))) throw new Error('unknown model');
+    if (!Array.isArray(clearSessions) || clearSessions.length > 200 || clearSessions.some((x) => typeof x !== 'string' || x.length > 200)) throw new Error('bad clearSessions');
+    const obj = this.readConfig();
+    const section = { session: 'sessions', folder: 'folders', account: 'accounts' }[scope];
+    const map = obj[section] && typeof obj[section] === 'object' && !Array.isArray(obj[section]) ? obj[section] : {};
+    // Which existing entries are this key (a folder can be written as ~/x, /Users/…/x or with a trailing slash).
+    const id = key.trim().toLowerCase();
+    const same = Object.keys(map).filter((k) => (scope === 'folder' ? normPath(k.trim()) === normPath(key.trim())
+      : scope === 'session' ? id.startsWith(k.trim().toLowerCase()) && k.trim().length >= 6 : k.trim().toLowerCase() === id));
+    const prev = same.length ? map[same[0]] : null;
+    for (const k of same) delete map[k];
+    if (model !== null) {
+      let newKey = key.trim();
+      if (scope === 'session') newKey = id.slice(0, 12);
+      else if (scope === 'account') newKey = id;
+      else if (same.length) newKey = same[0];
+      else {
+        const home = os.homedir().replace(/\\/g, '/');
+        const p = normPath(newKey);
+        newKey = p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
+      }
+      // Turn and height belong to the model they were tuned for.
+      const keep = prev && typeof prev === 'object' && prev.model === model ? prev : null;
+      map[newKey] = keep || model;
+    }
+    for (const sid of clearSessions) {
+      const lower = String(sid).trim().toLowerCase();
+      if (!lower) continue;
+      const smap = obj.sessions && typeof obj.sessions === 'object' ? obj.sessions : null;
+      if (!smap || smap === map) continue;
+      for (const k of Object.keys(smap)) if (lower.startsWith(k.trim().toLowerCase()) && k.trim().length >= 6) delete smap[k];
+    }
+    obj[section] = map;
+    if (!Object.keys(map).length) delete obj[section];
+    this.writeConfig(obj);
+    return this.listing();
+  }
+
+  // A model's name-tag colour (#rrggbb), or null to go back to the account's.
+  setColor(model, color) {
+    if (!(typeof model === 'string' && MODEL_NAME.test(model) && this.modelFile(model))) throw new Error('unknown model');
+    if (color !== null && !(typeof color === 'string' && HEX_COLOR.test(color))) throw new Error('bad colour');
+    const obj = this.readConfig();
+    const colors = obj.colors && typeof obj.colors === 'object' && !Array.isArray(obj.colors) ? obj.colors : {};
+    if (color === null) delete colors[model]; else colors[model] = color.toLowerCase();
+    obj.colors = colors;
+    if (!Object.keys(colors).length) delete obj.colors;
+    this.writeConfig(obj);
+    return this.listing();
   }
 }
 

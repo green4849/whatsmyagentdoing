@@ -163,7 +163,7 @@ function snapshot(watcher, opts, filter = DEFAULT_FILTER(opts)) {
   const chars = (opts.characters || sharedCharacters()).refresh();
   const sessions = raw.map((s) => view(s, now, opts)).filter((s) => matchAccount(f.account, s.account)
     && matchFolder(f.folder, s.cwd) && (!f.agent.length || f.agent.includes(s.agent)));
-  for (const s of sessions) s.character = chars.resolve(s);
+  for (const s of sessions) { s.character = chars.resolve(s); s.characterRule = chars.rule(s); }
   sessions.sort((a, b) => (b.lastEventAt || 0) - (a.lastEventAt || 0));
   // Notes between the sessions shown, for the flying-note motion; no text when private.
   const shown = new Set(sessions.map((s) => s.key));
@@ -231,6 +231,27 @@ function createServer(watcher, opts, { onShutdown, onRestart } = {}) {
       if (!file) { res.writeHead(404).end(); return; }
       res.writeHead(200, { 'content-type': 'model/gltf-binary', 'cache-control': 'no-cache' });
       fs.createReadStream(file).pipe(res);
+    } else if (url.pathname === '/api/characters') {
+      // The picker's data and its writes (src/characters.js). Writes need a header web
+      // pages can't send cross-site, like the other POSTs, and are small by design.
+      const chars = opts.characters || sharedCharacters();
+      const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+      if (req.method === 'GET') { json(200, chars.listing()); return; }
+      if (req.method !== 'POST' || req.headers['x-whatsmyagentdoing'] !== 'characters') { res.writeHead(403).end(); return; }
+      readBody(req, 64 * 1024).then((buf) => {
+        if (!buf) { res.writeHead(413).end(); return; }
+        let b;
+        try { b = JSON.parse(buf.toString('utf8')); } catch { res.writeHead(400).end(); return; }
+        if (!b || typeof b !== 'object') { res.writeHead(400).end(); return; }
+        try {
+          let out;
+          if (b.op === 'color') out = chars.setColor(b.model, b.color ?? null);
+          else if (b.op === 'assign') out = chars.assign({ scope: b.scope, key: b.key, model: b.model ?? null, clearSessions: b.clearSessions });
+          else throw new Error('unknown op');
+          push(false); // the new look reaches open pages now, not on the next clock tick
+          json(200, out);
+        } catch (e) { json(400, { error: String(e.message || e) }); }
+      }, () => { if (!res.headersSent) res.writeHead(500).end(); });
     } else if (url.pathname.startsWith('/scenes/')) {
       let rel;
       try { rel = decodeURIComponent(url.pathname.slice('/scenes/'.length)); }
